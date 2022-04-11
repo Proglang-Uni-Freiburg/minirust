@@ -22,6 +22,7 @@ pub enum PatternConstructor {
     Variant(String),
     IntRange(i128, i128),
     Wildcard,
+    NonExhaustive,
     Or,
     Missing(Vec<PatternConstructor>),
 }
@@ -108,6 +109,7 @@ fn deconstruct(p: &FromPattern, ty: &FromType, env: &Env) -> _DeconstructedPatte
                 ),
                 _ => unreachable!(),
             },
+            Type::Str => (PatternConstructor::NonExhaustive, vec![]),
             _ => unreachable!(),
         },
         Pattern::Struct(_, _, pat) => match ty.it() {
@@ -179,7 +181,7 @@ impl PatternConstructor {
             (PatternConstructor::IntRange(lo, hi), PatternConstructor::IntRange(olo, ohi)) => {
                 lo >= olo && hi <= ohi
             }
-            // (PatternConstructor::NonExhaustive, _) => false,
+            (PatternConstructor::NonExhaustive, _) => false,
             _ => unimplemented!(
                 "matched pattern constructor {:#?} with invalid {:#?}",
                 self,
@@ -196,6 +198,7 @@ impl PatternConstructor {
                 (-i64::MAX).into(),
                 i64::MAX.into(),
             )],
+            Type::Str => vec![PatternConstructor::NonExhaustive],
             Type::Tup(_) => vec![PatternConstructor::Single],
             Type::Rec(_) => vec![PatternConstructor::Single],
             Type::Struct(_, _) => vec![PatternConstructor::Single],
@@ -473,6 +476,7 @@ pub fn is_exhaustive<T: Item>(
     env: &Env,
 ) -> Result<()> {
     let mut matrix = vec![];
+    let ty = resolve(ty, env).unwrap();
 
     let deconstructed_patterns: Vec<_DeconstructedPattern> =
         pats.it().iter().map(|x| deconstruct(x, &ty, env)).collect();
@@ -496,7 +500,7 @@ pub fn is_exhaustive<T: Item>(
     is_useful(&matrix, &wildcard, env);
 
     if wildcard[0].it().reachable.get() {
-        return Err(Error::new("non-exhaustive match").label(m, "missing some constructors"));
+        return Err(Error::new("non-exhaustive match").label(m, format!("does not cover all constructors of {}", ty)));
     }
 
     for (pat, reachable) in pat_reachable {

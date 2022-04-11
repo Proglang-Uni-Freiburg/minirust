@@ -125,6 +125,7 @@ fn debruijn_type(typ: &FromType, env: &Ctx<Path>) -> Result<ToType> {
         Type::Unit => Type::Unit,
         Type::Bool => Type::Bool,
         Type::Int => Type::Int,
+        Type::Str => Type::Str,
         Type::Tup(els) => Type::Tup(map!(debruijn_type(els, env))),
         // Type::Sum(els) => Type::Sum(map!(debruijn_type(els, env))),
         Type::Rec(fields) => Type::Rec(map!(debruijn_type(fields, env))),
@@ -142,6 +143,7 @@ fn debruijn_term(term: &FromTerm, ctx: &Ctx<Path>, env: &Ctx<Path>) -> Result<To
         Term::True => Term::True,
         Term::False => Term::False,
         Term::Int(i) => Term::Int(i.clone()),
+        Term::Str(s) => Term::Str(s.clone()),
         Term::Tup(els) => Term::Tup(map!(debruijn_term(els, ctx, env))),
         Term::Rec(fields) => Term::Rec(map!(debruijn_term(fields, ctx, env))),
         Term::Var(id) => {

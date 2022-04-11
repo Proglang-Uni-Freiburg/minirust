@@ -25,6 +25,9 @@ impl<T: Clone> Ctx<T> {
     pub fn iter(&self) -> impl Iterator<Item = &T> {
         self.0.iter()
     }
+    pub fn from(iter: impl Iterator<Item = T>) -> Self {
+        Ctx(iter.collect())
+    }
 }
 
 // outsourced because of partial eq trait bound (not necessary for all ctxs used)

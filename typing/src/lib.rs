@@ -59,12 +59,12 @@ fn type_check_top(top: &FromTop, ctx: &Ctx, env: &Ctx) -> Result<()> {
     match top.it() {
         Top::Fun(_, args, ret, body) => {
             args.lefts().no_dups()?;
-            for (pat, ty) in args.it() {
-                usefulness::is_exhaustive(&pat.set(vec![pat.clone()]), ty, &top, env)?;
-            }
             let mut _ctx = ctx.clone();
             for (pat, ty) in args.it() {
                 types_of_pattern(pat, &ty, &mut _ctx, env)?;
+            }
+            for (pat, ty) in args.it() {
+                usefulness::is_exhaustive(&pat.set(vec![pat.clone()]), ty, pat, env)?;
             }
             type_of_term(body, &_ctx, env)?.eq(ret, env)?;
             Ok(())
@@ -83,6 +83,7 @@ fn type_of_term(term: &FromTerm, ctx: &Ctx, env: &Env) -> Result<ToType> {
         Term::True => Type::Bool,
         Term::False => Type::Bool,
         Term::Int(_) => Type::Int,
+        Term::Str(_) => Type::Str,
         Term::Seq(left, right) => {
             type_of_term(left, ctx, env)?;
             type_of_term(right, ctx, env)?.into_it()
@@ -103,7 +104,15 @@ fn type_of_term(term: &FromTerm, ctx: &Ctx, env: &Env) -> Result<ToType> {
             left_ty.eq(&right_ty, env)?;
             let left_ty = resolve(&left_ty, env)?;
             match op.it() {
-                BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div => {
+                BinOp::Add => match left_ty.eq(&left.set(Type::Int), env) {
+                    Ok(_) => Type::Int,
+                    Err(_) => match left_ty.eq(&left.set(Type::Str), env) {
+                        Ok(_) => Type::Str,
+                        Err(_) => return Err(Error::new("expected Int or Str to apply arithmetic operation")
+                        .label(term, format!("these are {}", left_ty))),
+                    },
+                },
+                BinOp::Sub | BinOp::Mul | BinOp::Div => {
                     match left_ty.eq(&left.set(Type::Int), env) {
                         Ok(_) => Type::Int,
                         Err(_) => {
@@ -185,12 +194,12 @@ fn type_of_term(term: &FromTerm, ctx: &Ctx, env: &Env) -> Result<ToType> {
         Term::Let(pat, t, cnt) => {
             pat.no_dups()?;
             let ty = type_of_term(t, ctx, env)?;
-            usefulness::is_exhaustive(&pat.set(vec![pat.clone()]), &ty, &term, env)?;
             let mut _ctx = ctx.clone();
             match pat.it() {
                 Pattern::Var(_) => _ctx._mutate(ty.clone()),
                 _ => types_of_pattern(pat, &ty, &mut _ctx, env)?,
             }
+            usefulness::is_exhaustive(&pat.set(vec![pat.clone()]), &ty, &term, env)?;
             type_of_term(cnt, &_ctx, env)?.into_it()
         }
         Term::Lam(args, body) => {
@@ -228,15 +237,15 @@ fn type_of_term(term: &FromTerm, ctx: &Ctx, env: &Env) -> Result<ToType> {
         }
         Term::Fun(id, args, ret, body, cnt) => {
             args.lefts().no_dups()?;
-            for (pat, ty) in args.it() {
-                usefulness::is_exhaustive(&pat.set(vec![pat.clone()]), ty, &term, env)?;
-            }
             let mut _ctx = ctx.clone();
             for (pat, ty) in args.it() {
                 types_of_pattern(pat, &ty, &mut _ctx, env)?;
             }
             type_of_term(body, &_ctx, env)?.eq(ret, env)?;
             let fun_ty = id.set(Type::Fun(args.rights(), ret.clone()));
+            for (pat, ty) in args.it() {
+                usefulness::is_exhaustive(&pat.set(vec![pat.clone()]), ty, &term, env)?;
+            }
             type_of_term(cnt, &ctx.mutate(fun_ty.clone()), env)?.into_it()
         }
     }))
@@ -295,7 +304,7 @@ fn types_of_pattern_variant(
             _ => {
                 return Err(Error::new("pattern type mismatch")
                     .label(pat, "here")
-                    .label(var, format!("want {}", var)))
+                    .label(var, "want"))
             }
         },
         Pattern::Rec(pats) => match var.it() {
@@ -303,13 +312,13 @@ fn types_of_pattern_variant(
             _ => {
                 return Err(Error::new("pattern type mismatch")
                     .label(pat, "here")
-                    .label(var, format!("want {}", var)))
+                    .label(var, "want"))
             }
         },
         _ => {
             return Err(Error::new("pattern type mismatch")
                 .label(pat, "here")
-                .label(var, format!("want {}", var)))
+                .label(var, "want"))
         }
     }
 }

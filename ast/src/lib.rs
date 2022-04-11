@@ -30,6 +30,7 @@ pub enum Type<R: Repr + Clone + Debug> {
     Unit,
     Bool,
     Int,
+    Str,
 
     Tup(_Vec<R, _Type<R>>),
     // Sum(_Vec<R, _Type<R>>),
@@ -103,6 +104,7 @@ pub enum Term<R: Repr + Clone + Debug> {
     True,
     False,
     Int(i64),
+    Str(String),
 
     Seq(_Term<R>, _Term<R>),
 
@@ -147,6 +149,7 @@ pub enum Value<R: Repr + Clone + Debug> {
     Unit,
     Bool(bool),
     Int(i64),
+    Str(String),
 
     Tup(_Vec<R, _Value<R>>),
     Rec(_Vec<R, (_Ident<R>, _Value<R>)>),
@@ -155,6 +158,7 @@ pub enum Value<R: Repr + Clone + Debug> {
     Enum(Path, _Ident<R>, _Body<R>),
 
     Clos(_Vec<R, _Pattern<R>>, _Term<R>, Ctx<_Value<R>>),
+    TopClos(_Vec<R, _Pattern<R>>, _Term<R>),
 }
 
 pub type _Variant<R> = Tag<<R as Repr>::Ann, Variant<R>>;
@@ -250,13 +254,11 @@ impl<R: Repr + Clone + Debug> Display for Variant<R> {
 impl<R: Repr + Clone + Debug> Display for Type<R> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Type::Var(_) => write!(
-                f,
-                "[bug] unresolved type variable",
-            ),
+            Type::Var(_) => write!(f, "[bug] unresolved type variable",),
             Type::Unit => write!(f, "()"),
             Type::Bool => write!(f, "Bool"),
             Type::Int => write!(f, "Int"),
+            Type::Str => write!(f, "Str"),
             Type::Tup(els) => write!(
                 f,
                 "({})",
@@ -341,6 +343,7 @@ impl<R: Repr + Clone + Debug> Display for Value<R> {
             Value::Unit => write!(f, "()"),
             Value::Bool(b) => write!(f, "{}", b),
             Value::Int(i) => write!(f, "{}", i),
+            Value::Str(s) => write!(f, "{}", s),
             Value::Tup(els) => write!(
                 f,
                 "({})",
@@ -376,10 +379,8 @@ impl<R: Repr + Clone + Debug> Display for Value<R> {
                     .collect::<Vec<String>>()
                     .join("::")
             ),
-            Value::Clos(_, _, _) => write!(
-                f,
-                "Closure"
-            ),
+            Value::Clos(_, _, _) => write!(f, "callable"),
+            Value::TopClos(_, _) => write!(f, "function")
         }
     }
 }

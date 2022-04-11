@@ -19,7 +19,7 @@ pub fn eval(program: &FromProgram) -> Result<ToValue> {
     for top in program.it() {
         match top.it() {
             ast::Top::Fun(id, args, _, body) => {
-                ctx._mutate(top.set(Value::Clos(args.lefts(), body.clone(), ctx.clone())));
+                ctx._mutate(top.set(Value::TopClos(args.lefts(), body.clone())));
                 if id.it() == "main" {
                     main = Some(body);
                     if args.it().len() > 0 {
@@ -33,7 +33,7 @@ pub fn eval(program: &FromProgram) -> Result<ToValue> {
     }
     // println!("CTX {}", ctx.iter().map(|x| format!("{}", x)).collect::<Vec<String>>().join(","));
     if let Some(main) = main {
-        eval_term(main, &ctx)
+        eval_term(main, &ctx, &ctx.clone())
     } else {
         return Err(Error::new(format!(
             "main function not found in {}.foo",
@@ -42,20 +42,27 @@ pub fn eval(program: &FromProgram) -> Result<ToValue> {
     }
 }
 
-fn eval_term(t: &FromTerm, ctx: &Ctx<ToValue>) -> Result<ToValue> {
+fn eval_term(t: &FromTerm, ctx: &Ctx<ToValue>, top_ctx: &Ctx<ToValue>) -> Result<ToValue> {
     Ok(t.set(match t.it() {
-        ast::Term::Var(i) =>  ctx.lookup(i.it().clone()).unwrap().into_it(),
+        ast::Term::Var(i) => {
+            // println!("CTX {} - {}", ctx.iter().map(|x| format!("{}", x)).collect::<Vec<String>>().join(","), i);
+            match ctx.lookup(i.it().clone()) {
+                Some(s) => s.into_it(),
+                None => return Err(Error::new("interpreter bug").label(t, "should be resolved")),
+            }
+        }
         ast::Term::Unit => Value::Unit,
         ast::Term::True => Value::Bool(true),
         ast::Term::False => Value::Bool(false),
         ast::Term::Int(i) => Value::Int(i.clone()),
+        ast::Term::Str(s) => Value::Str(s.clone()),
         ast::Term::Seq(left, right) => {
-            eval_term(left, ctx)?;
-            eval_term(right, ctx)?.into_it()
+            eval_term(left, ctx, top_ctx)?;
+            eval_term(right, ctx, top_ctx)?.into_it()
         }
-        ast::Term::Tup(els) => Value::Tup(map!(eval_term(els, ctx))),
-        ast::Term::Rec(fields) => Value::Rec(map!(eval_term(fields, ctx))),
-        ast::Term::UnOp(op, it) => match (op.it(), eval_term(it, ctx)?.it()) {
+        ast::Term::Tup(els) => Value::Tup(map!(eval_term(els, ctx, top_ctx))),
+        ast::Term::Rec(fields) => Value::Rec(map!(eval_term(fields, ctx, top_ctx))),
+        ast::Term::UnOp(op, it) => match (op.it(), eval_term(it, ctx, top_ctx)?.it()) {
             (ast::UnOp::Not, Value::Bool(true)) => Value::Bool(false),
             (ast::UnOp::Not, Value::Bool(false)) => Value::Bool(true),
             (ast::UnOp::Neg, Value::Int(i)) => Value::Int(-i.clone()),
@@ -63,9 +70,9 @@ fn eval_term(t: &FromTerm, ctx: &Ctx<ToValue>) -> Result<ToValue> {
         },
         ast::Term::BinOp(left, op, right) => {
             match (
-                eval_term(left, ctx)?.it(),
+                eval_term(left, ctx, top_ctx)?.it(),
                 op.it(),
-                eval_term(right, ctx)?.it(),
+                eval_term(right, ctx, top_ctx)?.it(),
             ) {
                 (
                     Value::Int(i1),
@@ -78,6 +85,7 @@ fn eval_term(t: &FromTerm, ctx: &Ctx<ToValue>) -> Result<ToValue> {
                     BinOp::Div => Value::Int(i1 / i2),
                     _ => unreachable!(),
                 },
+                (Value::Str(s1), BinOp::Add, Value::Str(s2)) => Value::Str(s1.clone() + s2),
                 (
                     Value::Int(i1),
                     op @ (BinOp::Gt | BinOp::Gte | BinOp::Lt | BinOp::Lte),
@@ -102,26 +110,41 @@ fn eval_term(t: &FromTerm, ctx: &Ctx<ToValue>) -> Result<ToValue> {
                 _ => unreachable!(),
             }
         }
-        ast::Term::Struct(_, id, var) => Value::Struct(id.clone(), eval_variant(var, ctx)?),
-        ast::Term::Enum(_, id, var_name, var) => {
-            Value::Enum(id.clone(), var_name.clone(), eval_variant(var, ctx)?)
+        ast::Term::Struct(_, id, var) => {
+            Value::Struct(id.clone(), eval_variant(var, ctx, top_ctx)?)
         }
-        ast::Term::App(lam, app) => match eval_term(lam, ctx)?.it() {
+        ast::Term::Enum(_, id, var_name, var) => Value::Enum(
+            id.clone(),
+            var_name.clone(),
+            eval_variant(var, ctx, top_ctx)?,
+        ),
+        ast::Term::App(lam, app) => match eval_term(lam, ctx, top_ctx)?.it() {
             Value::Clos(pats, body, _ctx) => {
-                let mut _ctx = ctx.clone();
-                for (pat, val) in pats.it().iter().zip(map!(eval_term(app, ctx)).into_it()) {
-                    // must work because exhaustive single pattern
+                let mut _ctx = _ctx.clone();
+                for (pat, val) in pats
+                    .it()
+                    .iter()
+                    .zip(map!(eval_term(app, ctx, top_ctx)).into_it())
+                {
                     eval_pattern(pat, val, &mut _ctx).unwrap()
                 }
-                eval_term(body, &_ctx)?.into_it()
+                eval_term(body, &_ctx, top_ctx)?.into_it()
             }
-            v => {
-                println!("CTX {}", ctx.iter().map(|x| format!("{}", x)).collect::<Vec<String>>().join(","));
-                return Err(Error::new("here").label(lam, format!("got {}", v)))
+            Value::TopClos(pats, body) => {
+                let mut _ctx = top_ctx.clone();
+                for (pat, val) in pats
+                    .it()
+                    .iter()
+                    .zip(map!(eval_term(app, ctx, top_ctx)).into_it())
+                {
+                    eval_pattern(pat, val, &mut _ctx).unwrap()
+                }
+                eval_term(body, &_ctx, top_ctx)?.into_it()
             }
+            _ => unreachable!(),
         },
         ast::Term::TupProj(t, i) => {
-            let els = match eval_term(t, ctx)?.it() {
+            let els = match eval_term(t, ctx, top_ctx)?.it() {
                 Value::Tup(els) => els.clone(),
                 Value::Struct(_, var) | Value::Enum(_, _, var) => match var.it() {
                     Body::Tup(els) => els.clone(),
@@ -132,7 +155,7 @@ fn eval_term(t: &FromTerm, ctx: &Ctx<ToValue>) -> Result<ToValue> {
             els.it()[(i.it().clone() as usize)].it().clone()
         }
         ast::Term::RecProj(t, s) => {
-            let fields = match eval_term(t, ctx)?.it() {
+            let fields = match eval_term(t, ctx, top_ctx)?.it() {
                 Value::Rec(fields) => fields.clone(),
                 Value::Struct(_, var) | Value::Enum(_, _, var) => match var.it() {
                     Body::Rec(fields) => fields.clone(),
@@ -151,17 +174,17 @@ fn eval_term(t: &FromTerm, ctx: &Ctx<ToValue>) -> Result<ToValue> {
         }
         ast::Term::Let(pat, body, cnt) => {
             let mut _ctx = ctx.clone();
-            eval_pattern(pat, eval_term(body, ctx)?, &mut _ctx).unwrap();
-            eval_term(cnt, &_ctx)?.into_it()
+            eval_pattern(pat, eval_term(body, ctx, top_ctx)?, &mut _ctx).unwrap();
+            eval_term(cnt, &_ctx, top_ctx)?.into_it()
         }
         ast::Term::Lam(args, body) => Value::Clos(args.lefts(), body.clone(), ctx.clone()),
         ast::Term::Match(m, pats) => {
-            let val = eval_term(m, ctx)?;
+            let val = eval_term(m, ctx, top_ctx)?;
             for (pat, term) in pats.it() {
                 let mut _ctx = ctx.clone();
                 // one needs to match bc exhaustive
                 match eval_pattern(pat, val.clone(), &mut _ctx) {
-                    Ok(_) => return Ok(t.set(eval_term(term, &_ctx)?.into_it())),
+                    Ok(_) => return Ok(t.set(eval_term(term, &_ctx, top_ctx)?.into_it())),
                     Err(_) => continue,
                 }
             }
@@ -170,16 +193,17 @@ fn eval_term(t: &FromTerm, ctx: &Ctx<ToValue>) -> Result<ToValue> {
         ast::Term::Fun(_, args, _, body, cnt) => eval_term(
             cnt,
             &ctx.mutate(t.set(Value::Clos(args.lefts(), body.clone(), ctx.clone()))),
+            top_ctx,
         )?
         .into_it(),
     }))
 }
 
-fn eval_variant(var: &FromConstructor, ctx: &Ctx<ToValue>) -> Result<ToBody> {
+fn eval_variant(var: &FromConstructor, ctx: &Ctx<ToValue>, c: &Ctx<ToValue>) -> Result<ToBody> {
     Ok(var.set(match var.it() {
         Constructor::Unit => Body::Unit,
-        Constructor::Tup(els) => Body::Tup(map!(eval_term(els, ctx))),
-        Constructor::Rec(fields) => Body::Rec(map!(eval_term(fields, ctx))),
+        Constructor::Tup(els) => Body::Tup(map!(eval_term(els, ctx, c))),
+        Constructor::Rec(fields) => Body::Rec(map!(eval_term(fields, ctx, c))),
     }))
 }
 
@@ -225,9 +249,9 @@ fn eval_pattern_rec(
                 Some(pat) => {
                     eval_pattern(pat, v.1.clone(), ctx)?;
                 }
-                None => _ctx._mutate(v.1.clone()),
+                None => ctx._mutate(v.1.clone()),
             },
-            None => return Err(()),
+            None => unreachable!(),
         }
     }
     Ok(())

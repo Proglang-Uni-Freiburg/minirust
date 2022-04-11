@@ -75,6 +75,7 @@ peg::parser! {
             / i:path() { match i.it()[0].it().as_str() {
                 "Bool" if i.it().len() == 1 => ast::Type::Bool,
                 "Int" if i.it().len() == 1 => ast::Type::Int,
+                "Str" if i.it().len() == 1 => ast::Type::Str,
                 _ => ast::Type::Var(i)
             } }
 
@@ -128,6 +129,7 @@ peg::parser! {
             = "false" { ast::Term::False }
             / "true" { ast::Term::True }
             / i:i64() { ast::Term::Int(i) }
+            / "\"" s:$(quiet!{[^'"']*}) "\"" { ast::Term::Str(s.into()) }
             / "()" { ast::Term::Unit }
 
         rule const_term() -> Term  = precedence! {
@@ -150,6 +152,7 @@ peg::parser! {
             / "{" _ ts:lit_sep_plus(",", <lit_tup(":", <ident()>, <term()>)>) _ "}" { ast::Term::Rec(ts) }
             / "(" _ ts:lit_sep_plus(",", <term()>) _ ")" { ast::Term::Tup(ts) }
             / i:i64() { ast::Term::Int(i) }
+            / "\"" s:$(quiet!{[^'"']*}) "\"" { ast::Term::Str(s.into()) }
             / "false" { ast::Term::False }
             / "true" { ast::Term::True }
             / "()" { ast::Term::Unit }
@@ -183,7 +186,7 @@ peg::parser! {
             s:position!() "!" e:position!() _ x:term() { ast::Term::UnOp(Tag::new((path.clone(), (s, e)), ast::UnOp::Not), x) }
             s:position!() "-" e:position!() _ x:term() { ast::Term::UnOp(Tag::new((path.clone(), (s, e)), ast::UnOp::Neg), x) }
             --
-            l:(@) "(" _ ts:lit_sep_plus(",", <term()>) _ ")" { ast::Term::App(l, ts) }
+            l:(@) "(" __ ts:lit_sep_plus(",", <term()>) __ ")" { ast::Term::App(l, ts) }
             --
             t:(@) "." i:int() { ast::Term::TupProj(t, i) }
             t:(@) "." i:ident() { ast::Term::RecProj(t, i) }

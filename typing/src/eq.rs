@@ -19,6 +19,7 @@ impl TypeEq<_Type<Debruijn>> for _Type<Debruijn> {
             (Type::Unit, Type::Unit) => Ok(()),
             (Type::Bool, Type::Bool) => Ok(()),
             (Type::Int, Type::Int) => Ok(()),
+            (Type::Str, Type::Str) => Ok(()),
             (Type::Tup(left_els), Type::Tup(right_els)) => left_els.eq(right_els, env),
             (Type::Rec(left_fields), Type::Rec(right_fields)) => left_fields.eq(right_fields, env),
             (Type::Fun(left_args, left_ret), Type::Fun(right_args, right_ret)) => {
