@@ -1,0 +1,16 @@
+[workspace]
+
+members = [
+  # ast representation & commons
+  "ast",
+  # parsing 
+  "parse",
+  # resolves imports & transforms to debruijn ideces
+  "ir",
+  # type checking
+  "typing",
+  # interpreter
+  "eval",
+  # interpreter executable
+  "cli",
+]

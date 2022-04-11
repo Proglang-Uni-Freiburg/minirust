@@ -1,0 +1,29 @@
+enum AlgebraicDataType {
+    Base,
+    Tup(Int, Int),
+    Struct(Struct),
+    Recurse{ adt: AlgebraicDataType }
+}
+
+struct Struct {
+    field: { x: AlgebraicDataType, y: AlgebraicDataType }
+}
+
+fn main() -> Int {
+    let adt = AlgebraicDataType::Recurse { 
+        adt: AlgebraicDataType::Struct(Struct { field : { x: AlgebraicDataType::Tup(1, 2), y: AlgebraicDataType::Base } })
+    };
+    add_up(adt)
+}
+
+fn add_up(adt: AlgebraicDataType) -> Int {
+    match adt {
+        AlgebraicDataType::Base => 0,
+        AlgebraicDataType::Tup(i1, i2) => i1 + i2,
+        AlgebraicDataType::Struct(Struct { field: { x, y }}) => add_up(x) + add_up(y),
+        AlgebraicDataType::Recurse { adt: _ } => match adt {
+            AlgebraicDataType::Tup(i1, i2) => i1 + i2,
+            _ => add_up(adt)
+        }
+    }
+}

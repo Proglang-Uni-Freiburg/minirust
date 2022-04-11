@@ -1,0 +1,8 @@
+enum Foo{
+    Unit,
+    Rec {foo: Foo}
+}
+
+fn main() {
+    let x = Foo::Rec{ foo: Foo::Unit }
+}

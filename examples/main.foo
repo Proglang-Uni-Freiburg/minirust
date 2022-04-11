@@ -1,0 +1,14 @@
+enum Term {
+    Var(Int),
+    Lam(Term, Term),
+    App(Term, Term)
+}
+
+fn main() -> Int {
+    let t = Term::Var(0);
+    match t {
+        Term::Var(0) => 1,
+        Term::Lam(Term::Var(1), Term::Var(y)) | Term::Lam(Term::Var(_), Term::Var(y)) => 2,
+        _ => 3
+    }
+}

@@ -1,0 +1,17 @@
+[package]
+name = "cli"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ast = { path = "../ast" }
+ir = { path = "../ir" }
+parse = { path = "../parse" }
+typing = { path = "../typing" }
+eval = { path = "../eval" }
+
+[[bin]]
+name = "foo"
+path = "src/main.rs"
