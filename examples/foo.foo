@@ -1,8 +1,21 @@
-enum Foo{
-    Unit,
-    Rec {foo: Foo}
-}
+use std;
 
 fn main() {
-    let x = Foo::Rec{ foo: Foo::Unit }
+    let x = 5
+    x = 5
+    x = 10
+    main = main2
+    std::println("Hi");
+    main();
+    ()
+}
+
+struct S {
+    x: Int
+}
+
+fn main2() {
+    let s = S { x: 0 }
+    s = S { x: 1 }
+    ()
 }

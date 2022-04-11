@@ -123,6 +123,8 @@ pub enum Term<R: Repr + Clone + Debug> {
     RecProj(_Term<R>, _Ident<R>),
 
     Let(_Pattern<R>, _Term<R>, _Term<R>),
+    Assign(_Var<R>, _Term<R>, _Term<R>),
+
     Lam(_Vec<R, (_Pattern<R>, _Type<R>)>, _Term<R>),
     Match(_Term<R>, _Vec<R, (_Pattern<R>, _Term<R>)>),
 
@@ -414,9 +416,10 @@ impl<R: Repr + Clone + Debug> Display for Value<R> {
 
 #[macro_export]
 macro_rules! path {
-    ($($x:expr),+ $(,)?) => (
+    ($x:expr) => (
         {
-            vec![$($x.clone().into()),+]
+            let prefix = $x.code_ref().0.last().unwrap().clone();
+            vec![prefix, $x.to_string().clone()]
         }
     );
 }

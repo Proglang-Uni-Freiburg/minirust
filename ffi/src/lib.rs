@@ -14,7 +14,6 @@ use std::process::{Command};
 pub struct FFI {
     module_path: String,
     code_path: String,
-    code: String,
 }
 
 impl FFI {
@@ -26,11 +25,10 @@ impl FFI {
             .map(char::from)
             .collect();
         let ffi = FFI {
-            code: program.to_rust(env)?,
             module_path: format!("{}/{}.module", tmp, id),
             code_path: format!("{}/{}.rs", tmp, id),
         };
-        ffi.write().map_err(|_| Error::new("failed to write ffi"))?;
+        ffi.write(program.to_rust(env)?).map_err(|_| Error::new("failed to write ffi"))?;
         if !ffi.compile().map_err(|e| {
             Error::new(format!("failed to compile {}", e)).help("rustc needs to be installed")
         })? {
@@ -38,9 +36,9 @@ impl FFI {
         };
         Ok(ffi)
     }
-    fn write(&self) -> std::io::Result<()> {
+    fn write(&self, code: String,) -> std::io::Result<()> {
         let mut file = File::create(&self.code_path)?;
-        file.write_all(self.code.as_bytes())?;
+        file.write_all(code.as_bytes())?;
         Ok(())
     }
     fn compile(&self) -> std::io::Result<bool> {

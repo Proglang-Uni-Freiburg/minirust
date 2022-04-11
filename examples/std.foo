@@ -1,0 +1,30 @@
+fn println(message: Str) {~
+    use std::env;
+    println!("{}", message);
+~}
+
+fn read_line(message: Str) -> Str {~
+    use std::io;
+    let mut buffer = String::new();
+    io::stdin().read_line(&mut buffer).unwrap();
+    buffer   
+~}
+
+fn print(message: Str) {~
+    use std::io;
+    use std::io::Write;
+    print!("{}", message);
+    io::stdout().flush().unwrap();
+~}
+
+fn exit(code: Int) {~
+    use std::process;
+    use std::convert::TryInto;
+    process::exit(code.try_into().unwrap())
+~}
+
+fn arg(idx: Int) -> Str {~
+    use std::env;
+    use std::convert::TryFrom;
+    env::args().collect::<Vec<String>>()[usize::try_from(idx).unwrap()].clone()
+~}

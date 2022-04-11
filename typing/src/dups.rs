@@ -118,7 +118,13 @@ impl NoDups for _Vec<Debruijn, _Pattern<Debruijn>> {
 impl NoDups for _Program<Debruijn> {
     fn no_dups(&self) -> Result<()> {
         for a in self.it() {
-            if self.it().iter().filter(|b| a.id() == b.id()).count() > 1 {
+            if self
+                .it()
+                .iter()
+                .filter(|b| a.id() == b.id() && a.tag.0 == b.tag.0)
+                .count()
+                > 1
+            {
                 return Err(
                     Error::new("duplicated definition").label(a, "is already defined in this file")
                 );

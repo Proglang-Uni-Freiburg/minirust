@@ -10,10 +10,16 @@ struct Struct {
 }
 
 fn main() {
-    print("Hello World")
+    {let x = 5};
+    {x = ""};
+    match env_arg(2) {
+        "42" => print("good boy"),
+        x => print(x),
+    }
 }
 
 fn print(message: Str) {~
+    use std::env;
     println!("{}", message);
 ~}
 
@@ -27,4 +33,9 @@ fn read(message: Str) -> Str {~
     let mut buffer = String::new();
     io::stdin().read_line(&mut buffer).unwrap();
     buffer   
+~}
+
+fn env_arg(i: Int) -> Str {~
+    use std::convert::TryFrom;
+    std::env::args().collect::<Vec<String>>()[usize::try_from(i).unwrap()].clone()
 ~}

@@ -1,9 +1,10 @@
 use ast::ctx::{self, Ctx};
-use ast::err::{Error, Result};
+use ast::err::{Error, GetCodeRef, Result};
 use ast::tag::{MapTag, Tag, Untag};
 use ast::{map, path};
 use ast::{Constructor, Path, Pattern, Variant};
 use ast::{Term, Top, Type};
+use parse::parse;
 
 ast::def_from_to_ast_types! {
     from => Named,
@@ -16,13 +17,13 @@ pub fn transform(program: FromProgram) -> Result<ToProgram> {
 }
 
 pub fn resolve_imports_and_debruijn(program: FromProgram) -> Result<ToProgram> {
+    let tag = program.tag.clone();
+    let mut _program = vec![];
+    _program.extend(program.it().clone());
+    let mut used = vec![];
+    resolve(&mut _program, program.it(), &mut used)?;
     let mut ctx = Ctx::default();
     let mut env = Ctx::default();
-    let tag = program.tag.clone();
-    let mut _program = program.into_it();
-    // let mut used = vec![];
-    // TODO duplicated stuff
-    // resolve(&mut _program, &mut ctx, &mut env, &mut used)?;
     debruijn_program(
         &Tag::new(
             tag,
@@ -36,14 +37,31 @@ pub fn resolve_imports_and_debruijn(program: FromProgram) -> Result<ToProgram> {
     )
 }
 
-/* fn resolve(
-    program: &mut Vec<FromTop>,
-    ctx: &mut Ctx<Path>,
-    env: &mut Ctx<Path>,
-    used: &mut Vec<Path>,
-) -> Result<()> {
-    let mut _program = vec![];
-    for top in program {
+fn ctx_resolve<T: GetCodeRef + Untag<Vec<String>> + std::fmt::Debug>(
+    ctx: &Ctx<Path>,
+    id: &T,
+) -> Result<usize> {
+    let u = id.untag();
+    let oid = if u.len() == 1 {
+        let mut oid = vec![id.code_ref().0.last().unwrap().clone()];
+        oid.extend(u);
+        oid
+    } else {
+        u
+    };
+    /* println!(
+        "CTX {} - {:#?}",
+        ctx.iter()
+            .map(|x| format!("{}", x.join("::")))
+            .collect::<Vec<String>>()
+            .join(","),
+        oid
+    ); */
+    ctx::resolve(ctx, oid).ok_or_else(|| Error::new("unresolved identifier").label(id, "not found"))
+}
+
+fn resolve(program: &mut Vec<FromTop>, top: &Vec<FromTop>, used: &mut Vec<Path>) -> Result<()> {
+    for top in top {
         match top.it() {
             Top::Use(path) => {
                 let mut path = path.untag();
@@ -52,20 +70,19 @@ pub fn resolve_imports_and_debruijn(program: FromProgram) -> Result<ToProgram> {
                 new_path.append(&mut path);
                 if !used.contains(&new_path) {
                     used.push(new_path.clone());
-                    let mut new_program = parse(&std::path::Path::new(&format!(
+                    let new_program = parse(&std::path::Path::new(&format!(
                         "{}.foo",
                         new_path.join("/")
-                    )))?
-                    .into_it();
-                    resolve(&mut new_program, ctx, env, used)?;
-                    _program.append(&mut new_program);
+                    )))?;
+                    resolve(program, new_program.it(), used)?;
+                    program.extend(new_program.into_it());
                 }
             }
-            _ => {}
+            _ => continue,
         }
     }
     Ok(())
-} */
+}
 
 fn debruijn_program(
     program: &FromProgram,
@@ -122,12 +139,7 @@ fn debruijn_top(top: &FromTop, ctx: &Ctx<Path>, env: &Ctx<Path>) -> Result<ToTop
 
 fn debruijn_type(typ: &FromType, env: &Ctx<Path>) -> Result<ToType> {
     Ok(typ.set(match typ.it() {
-        Type::Var(id) => Type::Var(
-            id.set(
-                ctx::resolve(env, id.untag())
-                    .ok_or_else(|| Error::new("unresolved identifier").label(id, "not found"))?,
-            ),
-        ),
+        Type::Var(id) => Type::Var(id.set(ctx_resolve(env, id)?)),
         Type::Unit => Type::Unit,
         Type::Bool => Type::Bool,
         Type::Int => Type::Int,
@@ -153,12 +165,12 @@ fn debruijn_term(term: &FromTerm, ctx: &Ctx<Path>, env: &Ctx<Path>) -> Result<To
         Term::Tup(els) => Term::Tup(map!(debruijn_term(els, ctx, env))),
         Term::Rec(fields) => Term::Rec(map!(debruijn_term(fields, ctx, env))),
         Term::Var(id) => {
-            match ctx::resolve(ctx, id.untag()) {
-                Some(i) => Term::Var(id.set(i)),
+            match ctx_resolve(ctx, id) {
+                Ok(i) => Term::Var(id.set(i)),
                 // might be a enum / struct unit variant call (no syntactical difference)
-                None => debruijn_term(
+                Err(_) => debruijn_term(
                     &term.set(Term::Struct(
-                        id.clone(),
+                        id.set(vec![id.clone().into_it().into_iter().next().unwrap()]),
                         id.untag(),
                         Tag::new(id.it().last().unwrap().tag.clone(), Constructor::Unit),
                     )),
@@ -222,6 +234,11 @@ fn debruijn_term(term: &FromTerm, ctx: &Ctx<Path>, env: &Ctx<Path>) -> Result<To
                 ),
             }
         }
+        Term::Assign(var, t, cnt) => Term::Assign(
+            var.set(ctx_resolve(ctx, var)?),
+            map!(debruijn_term(t, ctx, env)),
+            map!(debruijn_term(cnt, ctx, env)),
+        ),
         Term::Fun(bind, args, ty, body, cnt) => {
             let mut _ctx = ctx.clone();
             Term::Fun(
@@ -239,7 +256,7 @@ fn debruijn_term(term: &FromTerm, ctx: &Ctx<Path>, env: &Ctx<Path>) -> Result<To
                 ),
                 map!(debruijn_type(ty, env)),
                 map!(debruijn_term(body, &_ctx, env)),
-                map!(debruijn_term(cnt, &ctx.mutate(path![bind.it()]), env)),
+                map!(debruijn_term(cnt, &ctx.mutate(path![bind]), env)),
             )
         }
         Term::BinOp(left, op, right) => Term::BinOp(
@@ -249,20 +266,21 @@ fn debruijn_term(term: &FromTerm, ctx: &Ctx<Path>, env: &Ctx<Path>) -> Result<To
         ),
         Term::UnOp(op, t) => Term::UnOp(op.clone(), map!(debruijn_term(t, ctx, env))),
         Term::Struct(id, path, constr) => {
-            match ctx::resolve(env, id.untag()) {
-                Some(i) => Term::Struct(
+            match ctx_resolve(env, id) {
+                Ok(i) => Term::Struct(
                     id.set(i),
                     path.clone(),
                     map!(debruijn_constructor(constr, ctx, env)),
                 ),
                 // might be a enum rec variant call (no syntactical difference)
-                None => {
+                Err(_) => {
                     if id.it().len() > 1 {
                         let mut oid = id.clone().into_it();
                         let variant = oid.pop().unwrap();
                         let path = oid.untag();
+                        let oid = oid.pop().unwrap();
                         debruijn_term(
-                            &term.set(Term::Enum(id.set(oid), path, variant, constr.clone())),
+                            &term.set(Term::Enum(id.set(vec![oid]), path, variant, constr.clone())),
                             ctx,
                             env,
                         )?
@@ -274,10 +292,7 @@ fn debruijn_term(term: &FromTerm, ctx: &Ctx<Path>, env: &Ctx<Path>) -> Result<To
             }
         }
         Term::Enum(id, path, var, constr) => Term::Enum(
-            id.set(
-                ctx::resolve(env, id.untag())
-                    .ok_or_else(|| Error::new("unresolved identifier").label(id, "not found"))?,
-            ),
+            id.set(ctx_resolve(env, id)?),
             path.clone(),
             var.clone(),
             map!(debruijn_constructor(constr, ctx, env)),
@@ -366,20 +381,21 @@ fn debruijn_pattern(pat: &FromPattern, ctx: &mut Ctx<Path>, env: &Ctx<Path>) -> 
             Pattern::Or(map!(debruijn_pattern(pats, ctx, env)))
         }
         Pattern::Struct(id, path, pat) => {
-            match ctx::resolve(env, id.untag()) {
-                Some(i) => Pattern::Struct(
+            match ctx_resolve(env, id) {
+                Ok(i) => Pattern::Struct(
                     id.set(i),
                     path.clone(),
                     map!(debruijn_pattern(pat, ctx, env)),
                 ),
                 // might be variant pattern or variable
-                None => {
+                Err(_) => {
                     if id.it().len() > 1 {
                         let mut oid = id.clone().into_it();
                         let variant = oid.pop().unwrap();
                         let np = oid.untag();
+                        let oid = oid.pop().unwrap();
                         debruijn_pattern(
-                            &pat.set(Pattern::Variant(id.set(oid), np, variant, pat.clone())),
+                            &pat.set(Pattern::Variant(id.set(vec![oid]), np, variant, pat.clone())),
                             ctx,
                             env,
                         )?
@@ -423,10 +439,7 @@ fn debruijn_pattern(pat: &FromPattern, ctx: &mut Ctx<Path>, env: &Ctx<Path>) -> 
             ),
         ),
         Pattern::Variant(id, path, var, pat) => Pattern::Variant(
-            id.set(
-                ctx::resolve(env, id.untag())
-                    .ok_or_else(|| Error::new("unresolved identifier").label(id, "not found"))?,
-            ),
+            id.set(ctx_resolve(env, id)?),
             path.clone(),
             var.clone(),
             map!(debruijn_pattern(pat, ctx, env)),

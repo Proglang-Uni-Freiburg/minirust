@@ -23,10 +23,6 @@ pub fn eval(program: &FromProgram, ffi: &Option<FFI>) -> Result<ToValue> {
                 ctx._mutate(top.set(Value::TopClos(args.lefts(), body.clone())));
                 if id.it() == "main" {
                     main = Some(body);
-                    if args.it().len() > 0 {
-                        return Err(Error::new("main function with arguments")
-                            .label(args, "unexpected arguments"));
-                    }
                 }
             }
             ast::Top::FFIFun(id, args, ty, _) => {
@@ -36,19 +32,13 @@ pub fn eval(program: &FromProgram, ffi: &Option<FFI>) -> Result<ToValue> {
         }
     }
     // println!("CTX {}", ctx.iter().map(|x| format!("{}", x)).collect::<Vec<String>>().join(","));
-    if let Some(main) = main {
-        eval_term(main, &ctx, &ctx.clone(), ffi)
-    } else {
-        return Err(Error::new(format!(
-            "main function not found in {}.foo",
-            program.tag.0.join("/")
-        )));
-    }
+    let top_ctx = ctx.clone();
+    eval_term(main.unwrap(), &mut ctx, &top_ctx, ffi)
 }
 
 fn eval_term(
     t: &FromTerm,
-    ctx: &Ctx<ToValue>,
+    ctx: &mut Ctx<ToValue>,
     top_ctx: &Ctx<ToValue>,
     ffi: &Option<FFI>,
 ) -> Result<ToValue> {
@@ -137,7 +127,7 @@ fn eval_term(
                 {
                     eval_pattern(pat, val, &mut _ctx).unwrap()
                 }
-                eval_term(body, &_ctx, top_ctx, ffi)?.into_it()
+                eval_term(body, &mut _ctx, top_ctx, ffi)?.into_it()
             }
             Value::TopClos(pats, body) => {
                 let mut _ctx = top_ctx.clone();
@@ -148,7 +138,7 @@ fn eval_term(
                 {
                     eval_pattern(pat, val, &mut _ctx).unwrap()
                 }
-                eval_term(body, &_ctx, top_ctx, ffi)?.into_it()
+                eval_term(body, &mut _ctx, top_ctx, ffi)?.into_it()
             }
             Value::FFIClos(id, tys, ty) => match ffi {
                 Some(f) => {
@@ -202,7 +192,13 @@ fn eval_term(
         ast::Term::Let(pat, body, cnt) => {
             let mut _ctx = ctx.clone();
             eval_pattern(pat, eval_term(body, ctx, top_ctx, ffi)?, &mut _ctx).unwrap();
-            eval_term(cnt, &_ctx, top_ctx, ffi)?.into_it()
+            eval_term(cnt, &mut _ctx, top_ctx, ffi)?.into_it()
+        }
+        ast::Term::Assign(var, t, cnt) => {
+            let idx = var.it().clone();
+            let t = eval_term(t, ctx, top_ctx, ffi)?;
+            ctx.set(idx, t);
+            eval_term(cnt, ctx, top_ctx, ffi)?.into_it()
         }
         ast::Term::Lam(args, body) => Value::Clos(args.lefts(), body.clone(), ctx.clone()),
         ast::Term::Match(m, pats) => {
@@ -211,7 +207,7 @@ fn eval_term(
                 let mut _ctx = ctx.clone();
                 // one needs to match bc exhaustive
                 match eval_pattern(pat, val.clone(), &mut _ctx) {
-                    Ok(_) => return Ok(t.set(eval_term(term, &_ctx, top_ctx, ffi)?.into_it())),
+                    Ok(_) => return Ok(t.set(eval_term(term, &mut _ctx, top_ctx, ffi)?.into_it())),
                     Err(_) => continue,
                 }
             }
@@ -219,7 +215,7 @@ fn eval_term(
         }
         ast::Term::Fun(_, args, _, body, cnt) => eval_term(
             cnt,
-            &ctx.mutate(t.set(Value::Clos(args.lefts(), body.clone(), ctx.clone()))),
+            &mut ctx.mutate(t.set(Value::Clos(args.lefts(), body.clone(), ctx.clone()))),
             top_ctx,
             ffi,
         )?
@@ -229,7 +225,7 @@ fn eval_term(
 
 fn eval_variant(
     var: &FromConstructor,
-    ctx: &Ctx<ToValue>,
+    ctx: &mut Ctx<ToValue>,
     top_ctx: &Ctx<ToValue>,
     ffi: &Option<FFI>,
 ) -> Result<ToBody> {
@@ -324,6 +320,10 @@ fn eval_pattern(
             ast::Term::False if matches!(val.it(), Value::Bool(false)) => {}
             ast::Term::Int(i1) => match val.it() {
                 Value::Int(i2) if i1 == i2 => {}
+                _ => return Err(()),
+            },
+            ast::Term::Str(s1) => match val.it() {
+                Value::Str(s2) if s1 == s2 => {}
                 _ => return Err(()),
             },
             _ => return Err(()),

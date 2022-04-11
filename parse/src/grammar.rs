@@ -138,14 +138,14 @@ peg::parser! {
             c:_const_term() { c }
         }
 
-
+        #[cache_left_rec]
         rule _term() -> ast::Term<Named>
-            = "let" spa() __ p:pattern() __ "=" __ t:term() _ "in" __ c:term() { ast::Term::Let(p, t, c) }
-            /* / "let" spa() __ p:pattern() __ "=" __ t:term() s:position!() "in"? e:position!() { ast::Term::Let(p, t, Tag::new((path.clone(), (s, e)), ast::Term::Unit)) } */
+            = "let" spa() __ p:pattern() __ "=" __ t:term() _ "\n" __ c:term() { ast::Term::Let(p, t, c) }
+            / "let" spa() __ s:position!() p:pattern() e:position!() __ "=" __ t:term() { ast::Term::Let(p, t, Tag::new((path.clone(), (s, e)), ast::Term::Unit)) }
             / "match" spa() t:term() _ "{" __ ts:lit_sep_plus(",", <lit_tup("=>", <pattern()>, <term()>)>) __ "}" { ast::Term::Match(t, ts) }
-            / "fn" spa() i:ident() _ "(" _ ts:lit_sep(",", <lit_tup(":", <pattern()>, <typ()>)>) _ ")" _ "->" _ ty:typ() __ "{" __ t:term() __ "}" __ c:term() { ast::Term::Fun(i, ts, ty, t, c) }
+            / "fn" spa() i:ident() _ "(" _ ts:lit_sep(",", <lit_tup(":", <pattern()>, <typ()>)>) _ ")" _ "->" _ ty:typ() __ "{" __ t:term() __ "}" _ "\n" __ c:term() { ast::Term::Fun(i, ts, ty, t, c) }
             / "fn" spa() i:ident() _ "(" _ ts:lit_sep(",", <lit_tup(":", <pattern()>, <typ()>)>) _ ")" _ "->" _ ty:typ() __ "{" __ t:term() __ "}" { let i_tag = i.tag.clone(); ast::Term::Fun(i, ts, ty, t, Tag::new(i_tag, ast::Term::Unit)) }
-            / "fn" spa() i:ident() _ "(" _ ts:lit_sep(",", <lit_tup(":", <pattern()>, <typ()>)>) _ ")" _ "{" __ t:term() __ "}" __ c:term() { let i_tag = i.tag.clone(); ast::Term::Fun(i, ts, Tag::new(i_tag, ast::Type::Unit), t, c) }
+            / "fn" spa() i:ident() _ "(" _ ts:lit_sep(",", <lit_tup(":", <pattern()>, <typ()>)>) _ ")" _ "{" __ t:term() __ "}"  _ "\n" __ c:term() { let i_tag = i.tag.clone(); ast::Term::Fun(i, ts, Tag::new(i_tag, ast::Type::Unit), t, c) }
             / "fn" spa() i:ident() _ "(" _ ts:lit_sep(",", <lit_tup(":", <pattern()>, <typ()>)>) _ ")" _ "{" __ t:term() __ "}" { let i_tag = i.tag.clone(); ast::Term::Fun(i, ts, Tag::new(i_tag.clone(), ast::Type::Unit), t, Tag::new(i_tag, ast::Term::Unit)) }
             / i:path() _ v:constructor() { let mut path = i.untag(); ast::Term::Struct(i, path, v) }
             / "|" _ ts:lit_sep_plus(",", <lit_tup(":", <pattern()>, <typ()>)>) _ "|"  _ "{" __ t:term() __ "}"  { ast::Term::Lam(ts, t) }
@@ -158,8 +158,11 @@ peg::parser! {
             / "()" { ast::Term::Unit }
             / "(" __ t:term() __ ")" { t.into_it() }
             / "{" __ t:term() __ "}" { t.into_it() }
+            / s:position!() i:ident() e:position!() _ "=" _ t:term()  _ "\n" __ c:term() { ast::Term::Assign(Tag::new((path.clone(), (s, e)), vec![i]), t, c) }
+            / s:position!() i:ident() e:position!() _ s:position!() "=" e:position!() _ t:term()  { ast::Term::Assign(Tag::new((path.clone(), (s, e)), vec![i]), t,  Tag::new((path.clone(), (s, e)), ast::Term::Unit)) }
             / i:path() { ast::Term::Var(i)   }
-
+        
+        #[cache_left_rec]
         rule term() -> Term = precedence! {
             s:position!() t:@ e:position!() { Tag::new((path.clone(), (s, e)), t) }
             --
@@ -213,7 +216,7 @@ peg::parser! {
         rule top() -> Top = precedence! {
             s:position!() t:@ e:position!() { Tag::new((path.clone(), (s, e)), t) }
             --
-            // "use" spa() p:path() { ast::Top::Use(p) }
+            "use" spa() p:path() { ast::Top::Use(p) }
             "struct" spa() i:ident() _ v:variant() { ast::Top::Struct(i, v) }
             "struct" spa() i:ident() s:position!() { let i_tag = i.tag.clone(); ast::Top::Struct(i, Tag::new(i_tag, ast::Variant::Unit)) }
             "enum" spa() i:ident() _ "{" __ ts:lit_sep_plus(",", <ident_variant()>) __ "}" { ast::Top::Enum(i, ts) }

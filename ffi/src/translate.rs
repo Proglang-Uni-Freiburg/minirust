@@ -1,6 +1,6 @@
 use ast::ctx::Ctx;
 use ast::err::{Error, Result};
-use ast::{Debruijn, _Program, _Type, _Variant, Value};
+use ast::{Debruijn, _Program, _Type, _Variant};
 
 pub trait ToRustCode {
     fn to_rust(&self, env: &Ctx<_Type<Debruijn>>) -> Result<String>;

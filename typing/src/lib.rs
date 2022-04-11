@@ -32,10 +32,26 @@ pub fn type_check(program: &FromProgram) -> Result<Option<FFI>> {
     program.no_dups()?;
 
     let mut ffi = false;
+    let mut main = false;
 
     for top in program.it() {
         match top.it() {
             Top::Fun(id, args, ret, _) => {
+                if id.it() == "main" {
+                    if !matches!(ret.it(), Type::Unit) {
+                        return Err(Error::new("main function does not have unit type")
+                        .label(ret, "unexpected type"));
+                    }
+                    if args.it().len() > 0 {
+                        return Err(Error::new("main function with arguments")
+                        .label(args, "unexpected arguments"));
+                    }
+                    if main {
+                        return Err(Error::new("duplicated main function")
+                            .label(top, "here"));
+                    }
+                    main = true;
+                }
                 ctx = ctx.mutate(id.set(Type::Fun(args.rights(), ret.clone())))
             }
             Top::FFIFun(id, args, ret, _) => {
@@ -59,6 +75,12 @@ pub fn type_check(program: &FromProgram) -> Result<Option<FFI>> {
     for top in program.it() {
        type_check_top(top, &ctx, &env)?;
     }
+    if !main {
+        return Err(Error::new(format!(
+            "main function not found in {}.foo",
+            program.tag.0.join("/")
+        )));
+    }
     if ffi {
         // type check rust code
         return Ok(Some(FFI::new(program, &env)?));
@@ -68,7 +90,7 @@ pub fn type_check(program: &FromProgram) -> Result<Option<FFI>> {
 
 fn type_check_top(top: &FromTop, ctx: &Ctx, env: &Ctx) -> Result<()> {
     match top.it() {
-        Top::Fun(_, args, ret, body) => {
+        Top::Fun(id, args, ret, body) => {
             args.lefts().no_dups()?;
             let mut _ctx = ctx.clone();
             for (pat, ty) in args.it() {
@@ -84,7 +106,7 @@ fn type_check_top(top: &FromTop, ctx: &Ctx, env: &Ctx) -> Result<()> {
             args.lefts().no_dups()?;
             if args.len() > 1 {
                 return Err(
-                    Error::new("too many arguments to ffi function").label(args, "maximum is 1").help("use a struct to pass more arguments")
+                    Error::new("too many arguments to ffi function").label(args, "maximum is 1")
                 );
             }
             Ok(())
@@ -225,6 +247,10 @@ fn type_of_term(term: &FromTerm, ctx: &Ctx, env: &Env) -> Result<ToType> {
             }
             usefulness::is_exhaustive(&pat.set(vec![pat.clone()]), &ty, &term, env)?;
             type_of_term(cnt, &_ctx, env)?.into_it()
+        }
+        Term::Assign(var, t, cnt) => {
+            type_of_term(t, ctx, env)?.eq(&ctx.lookup(var.clone()).unwrap(), env)?;
+            type_of_term(cnt, ctx, env)?.into_it()
         }
         Term::Lam(args, body) => {
             args.lefts().no_dups()?;
