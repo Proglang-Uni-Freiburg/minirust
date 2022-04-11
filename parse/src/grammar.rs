@@ -140,8 +140,8 @@ peg::parser! {
 
 
         rule _term() -> ast::Term<Named>
-            = "let" spa() __ p:pattern() __ "=" __ t:term() _ ";" __ c:term() { ast::Term::Let(p, t, c) }
-            / "let" spa() __ p:pattern() __ "=" __ t:term() s:position!() ";"? e:position!() { ast::Term::Let(p, t, Tag::new((path.clone(), (s, e)), ast::Term::Unit)) }
+            = "let" spa() __ p:pattern() __ "=" __ t:term() _ "in" __ c:term() { ast::Term::Let(p, t, c) }
+            /* / "let" spa() __ p:pattern() __ "=" __ t:term() s:position!() "in"? e:position!() { ast::Term::Let(p, t, Tag::new((path.clone(), (s, e)), ast::Term::Unit)) } */
             / "match" spa() t:term() _ "{" __ ts:lit_sep_plus(",", <lit_tup("=>", <pattern()>, <term()>)>) __ "}" { ast::Term::Match(t, ts) }
             / "fn" spa() i:ident() _ "(" _ ts:lit_sep(",", <lit_tup(":", <pattern()>, <typ()>)>) _ ")" _ "->" _ ty:typ() __ "{" __ t:term() __ "}" __ c:term() { ast::Term::Fun(i, ts, ty, t, c) }
             / "fn" spa() i:ident() _ "(" _ ts:lit_sep(",", <lit_tup(":", <pattern()>, <typ()>)>) _ ")" _ "->" _ ty:typ() __ "{" __ t:term() __ "}" { let i_tag = i.tag.clone(); ast::Term::Fun(i, ts, ty, t, Tag::new(i_tag, ast::Term::Unit)) }
@@ -186,7 +186,7 @@ peg::parser! {
             s:position!() "!" e:position!() _ x:term() { ast::Term::UnOp(Tag::new((path.clone(), (s, e)), ast::UnOp::Not), x) }
             s:position!() "-" e:position!() _ x:term() { ast::Term::UnOp(Tag::new((path.clone(), (s, e)), ast::UnOp::Neg), x) }
             --
-            l:(@) "(" __ ts:lit_sep_plus(",", <term()>) __ ")" { ast::Term::App(l, ts) }
+            l:(@) "(" __ ts:lit_sep(",", <term()>) __ ")" { ast::Term::App(l, ts) }
             --
             t:(@) "." i:int() { ast::Term::TupProj(t, i) }
             t:(@) "." i:ident() { ast::Term::RecProj(t, i) }
@@ -213,12 +213,14 @@ peg::parser! {
         rule top() -> Top = precedence! {
             s:position!() t:@ e:position!() { Tag::new((path.clone(), (s, e)), t) }
             --
-            "use" spa() p:path() { ast::Top::Use(p) }
+            // "use" spa() p:path() { ast::Top::Use(p) }
             "struct" spa() i:ident() _ v:variant() { ast::Top::Struct(i, v) }
             "struct" spa() i:ident() s:position!() { let i_tag = i.tag.clone(); ast::Top::Struct(i, Tag::new(i_tag, ast::Variant::Unit)) }
             "enum" spa() i:ident() _ "{" __ ts:lit_sep_plus(",", <ident_variant()>) __ "}" { ast::Top::Enum(i, ts) }
             "fn" spa() i:ident() _ "(" __ ts:lit_sep(",", <lit_tup(":", <pattern()>, <typ()>)>) __ ")" _ "->" _ ty:typ() __ "{" __ t:term() __ "}" { ast::Top::Fun(i, ts, ty, t) }
             "fn" spa() i:ident() _ "(" __ ts:lit_sep(",", <lit_tup(":", <pattern()>, <typ()>)>) __ ")" _ "{" __ t:term() __ "}" { let i_tag = i.tag.clone(); ast::Top::Fun(i, ts, Tag::new(i_tag, ast::Type::Unit), t) }
+            "fn" spa() i:ident() _ "(" __ ts:lit_sep(",", <lit_tup(":", <ident()>, <typ()>)>) __ ")" _ "->" _ ty:typ() __ "{~" s:position!() c:$(quiet!{[^'~']*}) e:position!() "~}" { ast::Top::FFIFun(i, ts, ty, Tag::new((path.clone(), (s, e)), c.into())) }
+            "fn" spa() i:ident() _ "(" __ ts:lit_sep(",", <lit_tup(":", <ident()>, <typ()>)>) __ ")" _ "{~" s:position!() c:$(quiet!{[^'~']*}) e:position!() "~}" { let i_tag = i.tag.clone(); ast::Top::FFIFun(i, ts, Tag::new(i_tag, ast::Type::Unit), Tag::new((path.clone(), (s, e)), c.into())) }
             "alias" spa() i:ident() _ "=" _ t:typ() { ast::Top::Alias(i, t) }
         }
 

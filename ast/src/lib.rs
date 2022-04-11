@@ -159,6 +159,7 @@ pub enum Value<R: Repr + Clone + Debug> {
 
     Clos(_Vec<R, _Pattern<R>>, _Term<R>, Ctx<_Value<R>>),
     TopClos(_Vec<R, _Pattern<R>>, _Term<R>),
+    FFIClos(_Ident<R>, _Vec<R, _Type<R>>, _Type<R>),
 }
 
 pub type _Variant<R> = Tag<<R as Repr>::Ann, Variant<R>>;
@@ -178,6 +179,12 @@ pub enum Top<R: Repr + Clone + Debug> {
         _Vec<R, (_Pattern<R>, _Type<R>)>,
         _Type<R>,
         _Term<R>,
+    ),
+    FFIFun(
+        _Bind<R>,
+        _Vec<R, (_Ident<R>, _Type<R>)>,
+        _Type<R>,
+        _Ident<R>,
     ),
     Alias(_Bind<R>, _Type<R>),
     Struct(_Bind<R>, _Variant<R>),
@@ -210,6 +217,7 @@ impl _Top<Debruijn> {
     pub fn id(&self) -> _Ident<Debruijn> {
         match &self.it() {
             Top::Fun(id, _, _, _) => id.clone(),
+            Top::FFIFun(id, _, _, _) => id.clone(),
             Top::Alias(id, _) => id.clone(),
             Top::Struct(id, _) => id.clone(),
             Top::Enum(id, _) => id.clone(),
@@ -223,6 +231,24 @@ impl _Path<Debruijn> {
         self.it().last().unwrap().clone()
     }
 }
+
+/* impl From<i64> for Value<Debruijn> {
+    fn from(i: i64) -> Self {
+        Value::Int(i)
+    }
+}
+
+impl From<String> for Value<Debruijn> {
+    fn from(s: String) -> Self {
+        Value::Str(s)
+    }
+}
+
+impl From<()> for Value<Debruijn> {
+    fn from(_: ()) -> Self {
+        Value::Unit
+    }
+} */
 
 impl<R: Repr + Clone + Debug> Display for Variant<R> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -380,7 +406,8 @@ impl<R: Repr + Clone + Debug> Display for Value<R> {
                     .join("::")
             ),
             Value::Clos(_, _, _) => write!(f, "callable"),
-            Value::TopClos(_, _) => write!(f, "function")
+            Value::TopClos(_, _) => write!(f, "toplevel callable"),
+            Value::FFIClos(_, _, _) => write!(f, "ffi callable"),
         }
     }
 }

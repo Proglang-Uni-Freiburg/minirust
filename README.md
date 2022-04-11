@@ -21,13 +21,16 @@ foo examples/example.foo
     - `lib.rs`: file or string parsing
     - `grammar.rs`: actual peg
 - `ir` [soon: resolving imports]
-    - `lib.rs`: debruijn transformation / resolve identical syntax
+    - `lib.rs`: debruijn transformation & resolve identical syntax
 - `typing`
     - `lib.rs`: type checking
     - `eq.rs`: defines type equality
     - `dups.rs`: filtering duplicated binders or definitions
     - `proj.rs`: handles projections on tuple / record (variants)
-    - `usefulness.rs`: match exhaustiveness / pattern reachability
+    - `usefulness.rs`: match exhaustiveness & pattern reachability
+- `ffi`
+    - `translate.rs`: translates to rust code
+    - `lib.rs`: compiles & calls rust code
 - `eval`
     - `lib.rs`: interpreter
 - `cli`

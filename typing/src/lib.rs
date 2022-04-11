@@ -9,6 +9,7 @@ use ast::{def_from_to_ast_types, map};
 use ast::{BinOp, Constructor, Debruijn, Pattern, UnOp, Variant, _Ident, _Pattern, _Type, _Vec};
 use ast::{Term, Top, Type};
 use eq::len_eq;
+use ffi::FFI;
 
 use crate::dups::NoDups;
 use crate::eq::TypeEq;
@@ -24,15 +25,21 @@ def_from_to_ast_types! {
 type Ctx = ast::ctx::Ctx<FromType>;
 type Env = ast::ctx::Ctx<FromType>;
 
-pub fn type_check(program: &FromProgram) -> Result<()> {
+pub fn type_check(program: &FromProgram) -> Result<Option<FFI>> {
     let mut ctx: Ctx = Ctx::default();
     let mut env: Ctx = Ctx::default();
 
     program.no_dups()?;
 
+    let mut ffi = false;
+
     for top in program.it() {
         match top.it() {
             Top::Fun(id, args, ret, _) => {
+                ctx = ctx.mutate(id.set(Type::Fun(args.rights(), ret.clone())))
+            }
+            Top::FFIFun(id, args, ret, _) => {
+                ffi = true;
                 ctx = ctx.mutate(id.set(Type::Fun(args.rights(), ret.clone())))
             }
             Top::Alias(id, ty) => env = env.mutate(id.set(ty.it().clone())),
@@ -50,9 +57,13 @@ pub fn type_check(program: &FromProgram) -> Result<()> {
         }
     }
     for top in program.it() {
-        type_check_top(top, &ctx, &env)?;
+       type_check_top(top, &ctx, &env)?;
     }
-    Ok(())
+    if ffi {
+        // type check rust code
+        return Ok(Some(FFI::new(program, &env)?));
+    }
+    Ok(None)
 }
 
 fn type_check_top(top: &FromTop, ctx: &Ctx, env: &Ctx) -> Result<()> {
@@ -67,6 +78,15 @@ fn type_check_top(top: &FromTop, ctx: &Ctx, env: &Ctx) -> Result<()> {
                 usefulness::is_exhaustive(&pat.set(vec![pat.clone()]), ty, pat, env)?;
             }
             type_of_term(body, &_ctx, env)?.eq(ret, env)?;
+            Ok(())
+        }
+        Top::FFIFun(_, args, _, _) => {
+            args.lefts().no_dups()?;
+            if args.len() > 1 {
+                return Err(
+                    Error::new("too many arguments to ffi function").label(args, "maximum is 1").help("use a struct to pass more arguments")
+                );
+            }
             Ok(())
         }
         Top::Alias(_, _) => Ok(()),
@@ -108,8 +128,12 @@ fn type_of_term(term: &FromTerm, ctx: &Ctx, env: &Env) -> Result<ToType> {
                     Ok(_) => Type::Int,
                     Err(_) => match left_ty.eq(&left.set(Type::Str), env) {
                         Ok(_) => Type::Str,
-                        Err(_) => return Err(Error::new("expected Int or Str to apply arithmetic operation")
-                        .label(term, format!("these are {}", left_ty))),
+                        Err(_) => {
+                            return Err(Error::new(
+                                "expected Int or Str to apply arithmetic operation",
+                            )
+                            .label(term, format!("these are {}", left_ty)))
+                        }
                     },
                 },
                 BinOp::Sub | BinOp::Mul | BinOp::Div => {

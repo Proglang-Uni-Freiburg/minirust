@@ -9,6 +9,8 @@ members = [
   "ir",
   # type checking
   "typing",
+  # ffi to rust
+  "ffi",
   # interpreter
   "eval",
   # interpreter executable

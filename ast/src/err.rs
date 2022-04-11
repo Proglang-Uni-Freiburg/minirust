@@ -104,9 +104,6 @@ fn parse_code_ref(code_ref: &CodeRef) -> (String, String, usize, (usize, usize))
 
     let end = std::cmp::min(end, src.len());
 
-    if lines.is_empty() || start == end {
-        unimplemented!("empty error")
-    }
 
     fn inc_or_zero(u: usize) -> usize {
         if u >= 1 {

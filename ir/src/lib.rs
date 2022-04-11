@@ -4,7 +4,6 @@ use ast::tag::{MapTag, Tag, Untag};
 use ast::{map, path};
 use ast::{Constructor, Path, Pattern, Variant};
 use ast::{Term, Top, Type};
-use parse::parse;
 
 ast::def_from_to_ast_types! {
     from => Named,
@@ -37,7 +36,7 @@ pub fn resolve_imports_and_debruijn(program: FromProgram) -> Result<ToProgram> {
     )
 }
 
-fn resolve(
+/* fn resolve(
     program: &mut Vec<FromTop>,
     ctx: &mut Ctx<Path>,
     env: &mut Ctx<Path>,
@@ -66,7 +65,7 @@ fn resolve(
         }
     }
     Ok(())
-}
+} */
 
 fn debruijn_program(
     program: &FromProgram,
@@ -75,6 +74,7 @@ fn debruijn_program(
 ) -> Result<ToProgram> {
     for top in program.it() {
         match top.it() {
+            Top::FFIFun(bind, _, _, _) => ctx._mutate(path![bind]),
             Top::Fun(bind, _, _, _) => ctx._mutate(path![bind]),
             Top::Alias(bind, _) => env._mutate(path![bind]),
             Top::Struct(bind, _) => env._mutate(path![bind]),
@@ -107,6 +107,12 @@ fn debruijn_top(top: &FromTop, ctx: &Ctx<Path>, env: &Ctx<Path>) -> Result<ToTop
                 map!(debruijn_term(body, &_ctx, env)),
             )
         }
+        Top::FFIFun(bind, args, ty, body) => Top::FFIFun(
+            bind.clone(),
+            map!(debruijn_type(args, env)),
+            map!(debruijn_type(ty, env)),
+            body.clone(),
+        ),
         Top::Alias(bind, ty) => Top::Alias(bind.clone(), map!(debruijn_type(ty, env))),
         Top::Struct(bind, body) => Top::Struct(bind.clone(), map!(debruijn_variant(body, env))),
         Top::Enum(bind, body) => Top::Enum(bind.clone(), map!(debruijn_variant(body, env))),
@@ -188,13 +194,13 @@ fn debruijn_term(term: &FromTerm, ctx: &Ctx<Path>, env: &Ctx<Path>) -> Result<To
             let a = map!(debruijn_term(args, ctx, env));
             match f.it() {
                 // might be a enum / struct tup variant call (no syntactical difference)
-                Term::Enum(i, path, var, _) => Term::Enum(
+                Term::Enum(i, path, var, _) if args.it().len() > 0 => Term::Enum(
                     i.clone(),
                     path.clone(),
                     var.clone(),
                     a.set(Constructor::Tup(a.clone())),
                 ),
-                Term::Struct(i, path, _) => {
+                Term::Struct(i, path, _) if args.it().len() > 0 => {
                     Term::Struct(i.clone(), path.clone(), a.set(Constructor::Tup(a.clone())))
                 }
                 _ => Term::App(f, a),

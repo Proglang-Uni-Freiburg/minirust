@@ -1,6 +1,6 @@
 use std::env;
 
-use ast::err::Error;
+use ast::{err::Error, Value};
 use eval::eval;
 use ir::transform;
 use parse::parse;
@@ -33,14 +33,17 @@ fn run<T: AsRef<std::path::Path>>(path: T, debug: bool) -> ast::err::Result<()> 
     if debug {
         println!("TRANSFORMED\n{:#?}\n\n", debruijn);
     }
-    type_check(&debruijn)?;
+    let mut ffi = type_check(&debruijn)?;
     if debug {
         println!("TYPE CHECKING\nsuccessful");
     };
-    let value = eval(&debruijn)?;
+    let value = eval(&debruijn, &mut ffi)?;
     if debug {
         println!("RESULT\n{:#?}", value);
     };
-    println!("{}", value);
+    match value.it() {
+        Value::Unit => {},
+        _ => println!("{}", value),
+    }
     Ok(())
 }

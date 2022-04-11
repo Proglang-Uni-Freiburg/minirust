@@ -2,35 +2,29 @@ enum AlgebraicDataType {
     Base,
     Tup(Int, Int),
     Struct(Struct),
-    Recurse(AlgebraicDataType)
+    Recurse(Int)
 }
 
 struct Struct {
-    field: { x: AlgebraicDataType, y: AlgebraicDataType }
+    field: Int
 }
 
-
-fn main() -> Int {
-    let adt = AlgebraicDataType::Recurse(
-        AlgebraicDataType::Struct(Struct { field : { x: AlgebraicDataType::Tup(1, 2), y: AlgebraicDataType::Base }  } ));    
-    add_up(adt)
+fn main() {
+    print("Hello World")
 }
 
+fn print(message: Str) {~
+    println!("{}", message);
+~}
 
-fn add(i: AlgebraicDataType, i2: Int) -> Int {
-    let x = "hi";
-    match x {
-        "hi" => 0 ,
-        _ => 1
-    }
-}
+fn read(message: Str) -> Str {~
+    use std::io;
+    use std::io::Write;
 
-fn add_up(adt: AlgebraicDataType) -> Int {
-    add(AlgebraicDataType::Base, 0) + add(AlgebraicDataType::Base, 1);
-    match adt {
-        AlgebraicDataType::Base => 0,
-        AlgebraicDataType::Tup(i1, i2) => i1 + i2,
-        AlgebraicDataType::Struct(Struct { field: { x, y }}) => add(x, 0) + add(y, 1),
-        AlgebraicDataType::Recurse(adt) => add_up(adt),
-    }
-}
+    print!("{}", message);
+    io::stdout().flush().unwrap();
+
+    let mut buffer = String::new();
+    io::stdin().read_line(&mut buffer).unwrap();
+    buffer   
+~}
