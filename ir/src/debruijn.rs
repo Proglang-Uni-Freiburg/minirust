@@ -16,46 +16,15 @@ fn ctx_resolve<T: GetCodeRef + Untag<Vec<String>> + std::fmt::Debug>(
     id: &T,
 ) -> Result<usize> {
     let u = id.untag();
-    println!(
-        "CTX {} - {}",
-        ctx.iter()
-            .map(|x| format!("{}", x.join("::")))
-            .collect::<Vec<String>>()
-            .join(","),
-        &u.join(", ")
-    );
     if u.len() > 1 {
         match ctx::resolve(ctx, u.clone()) {
-            Some(s) => Ok(s),
-            None => {
-                let mut oid = vec![id.code_ref().0.last().unwrap().clone()];
-                oid.extend(u);
-                println!(
-                    "CTX {} - {}",
-                    ctx.iter()
-                        .map(|x| format!("{}", x.join("::")))
-                        .collect::<Vec<String>>()
-                        .join(","),
-                    &oid.join(", ")
-                );
-                ctx::resolve(ctx, oid)
-                    .ok_or_else(|| Error::new("unresolved identifier").label(id, "not found"))
-            }
+            Some(s) => return Ok(s),
+            None => {}
         }
-    } else {
-        let mut oid = vec![id.code_ref().0.last().unwrap().clone()];
-        oid.extend(u);
-        println!(
-            "CTX {} - {}",
-            ctx.iter()
-                .map(|x| format!("{}", x.join("::")))
-                .collect::<Vec<String>>()
-                .join(","),
-            &oid.join(", ")
-        );
-        ctx::resolve(ctx, oid)
-            .ok_or_else(|| Error::new("unresolved identifier").label(id, "not found"))
     }
+    let mut oid = vec![id.code_ref().0.last().unwrap().clone()];
+    oid.extend(u);
+    ctx::resolve(ctx, oid).ok_or_else(|| Error::new("unresolved identifier").label(id, "not found"))
 }
 
 pub fn debruijn_program(
@@ -65,11 +34,11 @@ pub fn debruijn_program(
 ) -> Result<ToProgram> {
     for top in program.it() {
         match top.it() {
-            Top::FFIFun(bind, _, _, _) => ctx._mutate(path![bind]),
-            Top::Fun(bind, _, _, _) => ctx._mutate(path![bind]),
-            Top::Alias(bind, _) => env._mutate(path![bind]),
-            Top::Struct(bind, _) => env._mutate(path![bind]),
-            Top::Enum(bind, _) => env._mutate(path![bind]),
+            Top::FFIFun(bind, _, _, _) => ctx.insert(path![bind]),
+            Top::Fun(bind, _, _, _) => ctx.insert(path![bind]),
+            Top::Alias(bind, _) => env.insert(path![bind]),
+            Top::Struct(bind, _) => env.insert(path![bind]),
+            Top::Enum(bind, _) => env.insert(path![bind]),
             _ => unreachable!(),
         }
     }
@@ -315,7 +284,7 @@ fn debruijn_pattern(pat: &FromPattern, ctx: &mut Ctx<Path>, env: &Ctx<Path>) -> 
     Ok(pat.set(match pat.it() {
         Pattern::Wildcard => Pattern::Wildcard,
         Pattern::Var(id) => {
-            ctx._mutate(path![id]);
+            ctx.insert(path![id]);
             Pattern::Var(id.clone())
         }
         Pattern::Or(pats) => {
@@ -403,7 +372,7 @@ fn debruijn_pattern(pat: &FromPattern, ctx: &mut Ctx<Path>, env: &Ctx<Path>) -> 
                             match pat {
                                 Some(pat) => Some(map!(debruijn_pattern(pat, ctx, env))),
                                 None => {
-                                    ctx._mutate(path![i]);
+                                    ctx.insert(path![i]);
                                     None
                                 }
                             },

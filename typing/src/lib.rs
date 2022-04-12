@@ -242,7 +242,7 @@ fn type_of_term(term: &FromTerm, ctx: &Ctx, env: &Env) -> Result<ToType> {
             let ty = type_of_term(t, ctx, env)?;
             let mut _ctx = ctx.clone();
             match pat.it() {
-                Pattern::Var(_) => _ctx._mutate(ty.clone()),
+                Pattern::Var(_) => _ctx.insert(ty.clone()),
                 _ => types_of_pattern(pat, &ty, &mut _ctx, env)?,
             }
             usefulness::is_exhaustive(&pat.set(vec![pat.clone()]), &ty, &term, env)?;
@@ -322,7 +322,7 @@ fn types_of_pattern_rec(
         if let Some(pat) = pat {
             types_of_pattern(pat, &ty, ctx, env)?
         } else {
-            ctx._mutate(ty)
+            ctx.insert(ty)
         }
     }
     Ok(())
@@ -377,7 +377,7 @@ fn types_of_pattern(pat: &FromPattern, ty: &FromType, ctx: &mut Ctx, env: &Env) 
     let ty = resolve(ty, env)?;
     match pat.it() {
         Pattern::Var(_) => {
-            ctx._mutate(ty.clone());
+            ctx.insert(ty.clone());
             Ok(())
         }
         Pattern::Or(pats) => {

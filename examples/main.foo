@@ -4,9 +4,6 @@ use std::conv;
 use std::proc;
 
 fn main() {
-    match io::A::X(0) {
-        io::A::X(i) => io::println(conv::int_to_str(i));
-    };
     match env::args_len() {
         3 => {
             io::println("interpreter executable: " + env::arg(0)); 

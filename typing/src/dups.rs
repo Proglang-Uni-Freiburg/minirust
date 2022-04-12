@@ -1,7 +1,7 @@
 use ast::err::{Error, Result};
 use ast::tag::{Item, Tag};
 
-use ast::{Debruijn, Pattern, Variant, _Ident, _Pattern, _Program, _Variant, _Vec};
+use ast::{Debruijn, Pattern, Top, Variant, _Ident, _Pattern, _Program, _Top, _Variant, _Vec};
 
 pub trait NoDups {
     fn no_dups(&self) -> Result<()>;
@@ -121,7 +121,7 @@ impl NoDups for _Program<Debruijn> {
             if self
                 .it()
                 .iter()
-                .filter(|b| a.id() == b.id() && a.tag.0 == b.tag.0)
+                .filter(|b| top_id(a) == top_id(b) && a.tag.0 == b.tag.0)
                 .count()
                 > 1
             {
@@ -131,5 +131,16 @@ impl NoDups for _Program<Debruijn> {
             }
         }
         Ok(())
+    }
+}
+
+fn top_id(t: &_Top<Debruijn>) -> _Ident<Debruijn> {
+    match &t.it() {
+        Top::Fun(id, _, _, _) => id.clone(),
+        Top::FFIFun(id, _, _, _) => id.clone(),
+        Top::Alias(id, _) => id.clone(),
+        Top::Struct(id, _) => id.clone(),
+        Top::Enum(id, _) => id.clone(),
+        Top::Use(_) => unimplemented!(),
     }
 }

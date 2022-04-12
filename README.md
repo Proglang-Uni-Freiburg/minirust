@@ -8,7 +8,7 @@ experimental programming language with algebraic data types and pattern matching
 git clone https://github.com/Mari-W/foo-lang
 cd foo-lang
 cargo install --path cli
-foo examples/example.foo
+foo examples/main.foo
 ```
 
 ## structure & crates

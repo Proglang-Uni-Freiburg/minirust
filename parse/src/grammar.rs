@@ -161,7 +161,7 @@ peg::parser! {
             / s:position!() i:ident() e:position!() _ "=" _ t:term()  _ "\n" __ c:term() { ast::Term::Assign(Tag::new((path.clone(), (s, e)), vec![i]), t, c) }
             / s:position!() i:ident() e:position!() _ s:position!() "=" e:position!() _ t:term()  { ast::Term::Assign(Tag::new((path.clone(), (s, e)), vec![i]), t,  Tag::new((path.clone(), (s, e)), ast::Term::Unit)) }
             / i:path() { ast::Term::Var(i)   }
-        
+
         #[cache_left_rec]
         rule term() -> Term = precedence! {
             s:position!() t:@ e:position!() { Tag::new((path.clone(), (s, e)), t) }
@@ -227,10 +227,19 @@ peg::parser! {
             "alias" spa() i:ident() _ "=" _ t:typ() { ast::Top::Alias(i, t) }
         }
 
+        rule rm<T>(x: rule<T>) -> T
+            = x:x() { x }
+            / __ "/*" consume() x:x() { x }
+
+        #[cache_left_rec]
+        rule consume()
+            = quiet!{[^'*']*} "*/" __
+            / consume()
+
         pub rule program() -> Program = precedence! {
             s:position!() t:@ e:position!() { Tag::new((path.clone(), (s, e)), t) }
             --
-            __ ts:(top() ** sep()) __? { ts }
+            __ ts:(rm(<top()>) ** sep()) __? { ts }
         }
     }
 }

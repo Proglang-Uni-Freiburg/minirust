@@ -7,7 +7,7 @@ use parse::parse;
 use typing::type_check;
 use std::time::Instant;
 
-const DEBUG: bool = true;
+const DEBUG: bool = false;
 fn main() {
     let args: Vec<String> = env::args().collect();
 

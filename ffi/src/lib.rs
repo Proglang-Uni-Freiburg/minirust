@@ -9,7 +9,7 @@ use std::fs;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
-use std::process::{Command};
+use std::process::Command;
 
 pub struct FFI {
     module_path: String,
@@ -28,15 +28,19 @@ impl FFI {
             module_path: format!("{}/{}.module", tmp, id),
             code_path: format!("{}/{}.rs", tmp, id),
         };
-        ffi.write(program.to_rust(env)?).map_err(|_| Error::new("failed to write ffi"))?;
+        ffi.write(program.to_rust(env)?)
+            .map_err(|_| Error::new("failed to write ffi"))?;
         if !ffi.compile().map_err(|e| {
             Error::new(format!("failed to compile {}", e)).help("rustc needs to be installed")
         })? {
-            return Err(Error::new(format!("rust error in {}.foo", program.tag.0.join("/"))))
+            return Err(Error::new(format!(
+                "rust error in {}.foo",
+                program.tag.0.join("/")
+            )));
         };
         Ok(ffi)
     }
-    fn write(&self, code: String,) -> std::io::Result<()> {
+    fn write(&self, code: String) -> std::io::Result<()> {
         let mut file = File::create(&self.code_path)?;
         file.write_all(code.as_bytes())?;
         Ok(())

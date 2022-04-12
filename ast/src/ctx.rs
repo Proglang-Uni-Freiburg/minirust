@@ -2,7 +2,7 @@
 pub struct Ctx<T>(Vec<T>);
 
 impl<T: Clone> Ctx<T> {
-    pub fn _mutate<I: Into<T>>(&mut self, t: I) {
+    pub fn insert<I: Into<T>>(&mut self, t: I) {
         self.0.insert(0, t.into())
     }
 
@@ -28,8 +28,8 @@ impl<T: Clone> Ctx<T> {
     pub fn from(iter: impl Iterator<Item = T>) -> Self {
         Ctx(iter.collect())
     }
-    pub fn set(&mut self,  idx: usize, t: T) {
-        self.0[idx] = t;
+    pub fn set(&mut self, idx: usize, t: T) {
+        self.0[idx] = t; 
     }
 }
 
@@ -37,6 +37,12 @@ impl<T: Clone> Ctx<T> {
 pub fn resolve<V: Clone + std::cmp::PartialEq, T: Into<V>>(ctx: &Ctx<V>, t: T) -> Option<usize> {
     let t_prime = t.into();
     ctx.0.iter().position(|v| v == &t_prime)
+}
+
+impl<T: Clone> Default for Ctx<T> {
+    fn default() -> Self {
+        Ctx(vec![])
+    }
 }
 
 impl<T: std::fmt::Debug> std::fmt::Debug for Ctx<T> {
@@ -56,11 +62,5 @@ impl<T: std::fmt::Display> std::fmt::Display for Ctx<T> {
                 .collect::<Vec<String>>()
                 .join(",")
         )
-    }
-}
-
-impl<T: Clone> Default for Ctx<T> {
-    fn default() -> Self {
-        Ctx(vec![])
     }
 }

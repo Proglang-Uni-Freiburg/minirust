@@ -20,13 +20,13 @@ pub fn eval(program: &FromProgram, ffi: &Option<FFI>) -> Result<ToValue> {
     for top in program.it() {
         match top.it() {
             ast::Top::Fun(id, args, _, body) => {
-                ctx._mutate(top.set(Value::TopClos(args.lefts(), body.clone())));
+                ctx.insert(top.set(Value::TopClos(args.lefts(), body.clone())));
                 if id.it() == "main" {
                     main = Some(body);
                 }
             }
             ast::Top::FFIFun(id, args, ty, _) => {
-                ctx._mutate(top.set(Value::FFIClos(id.clone(), args.rights(), ty.clone())));
+                ctx.insert(top.set(Value::FFIClos(id.clone(), args.rights(), ty.clone())));
             }
             _ => {}
         }
@@ -266,7 +266,7 @@ fn eval_pattern_rec(
                     Ok(_) => {}
                     Err(_) => return Err(()),
                 },
-                None => _ctx._mutate(v.1.clone()),
+                None => _ctx.insert(v.1.clone()),
             },
             None => return Err(()),
         }
@@ -277,7 +277,7 @@ fn eval_pattern_rec(
                 Some(pat) => {
                     eval_pattern(pat, v.1.clone(), ctx)?;
                 }
-                None => ctx._mutate(v.1.clone()),
+                None => ctx.insert(v.1.clone()),
             },
             None => unreachable!(),
         }
@@ -311,7 +311,7 @@ fn eval_pattern(
     ctx: &mut Ctx<ToValue>,
 ) -> std::result::Result<(), ()> {
     match pat.it() {
-        ast::Pattern::Var(_) => ctx._mutate(val),
+        ast::Pattern::Var(_) => ctx.insert(val),
         ast::Pattern::Wildcard => return Ok(()),
         ast::Pattern::Const(c) => match c.it() {
             ast::Term::Unit if matches!(val.it(), Value::Unit) => {}

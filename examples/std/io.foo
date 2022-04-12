@@ -16,7 +16,3 @@ fn print(message: Str) {~
     print!("{}", message);
     io::stdout().flush().unwrap();
 ~}
-
-enum A {
-    X(Int)
-}

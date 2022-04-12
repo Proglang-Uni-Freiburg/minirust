@@ -1,4 +1,7 @@
-use crate::{tag::{Item, Tag}, Path};
+use crate::{
+    tag::{Item, Tag},
+    Path,
+};
 use annotate_snippets::display_list::{DisplayList, FormatOptions};
 use annotate_snippets::snippet::{Annotation, AnnotationType, Slice, Snippet, SourceAnnotation};
 
@@ -14,14 +17,10 @@ impl Error {
         Error {
             label: label.into(),
             items: vec![],
-            footer: vec![]
+            footer: vec![],
         }
     }
-    pub fn label<V: GetCodeRef, T: Into<String>>(
-        mut self,
-        code_ref: &V,
-        label: T,
-    ) -> Self {
+    pub fn label<V: GetCodeRef, T: Into<String>>(mut self, code_ref: &V, label: T) -> Self {
         self.items.push((code_ref.code_ref().clone(), label.into()));
         self
     }
@@ -49,7 +48,7 @@ impl Error {
             let (source, origin, line, (start, end)) = parse_code_ref(&code_ref);
             snip.slices.push(Slice {
                 source: source,
-                line_start:line,
+                line_start: line,
                 origin: Some(origin),
                 fold: true,
                 annotations: vec![SourceAnnotation {
@@ -98,12 +97,11 @@ impl<I: Item> GetCodeRef for Tag<CodeRef, I> {
 fn parse_code_ref(code_ref: &CodeRef) -> (String, String, usize, (usize, usize)) {
     let (path, (start, end)) = code_ref.clone();
     let path = format!("{}.foo", &path.join("/"));
-    let src = std::fs::read_to_string( std::path::Path::new(&path)).unwrap();
+    let src = std::fs::read_to_string(std::path::Path::new(&path)).unwrap();
     // 1 indexed
     let lines = src.lines().into_iter().collect::<Vec<&str>>();
 
     let end = std::cmp::min(end, src.len());
-
 
     fn inc_or_zero(u: usize) -> usize {
         if u >= 1 {
@@ -142,7 +140,19 @@ fn parse_code_ref(code_ref: &CodeRef) -> (String, String, usize, (usize, usize))
     if new_start == new_end {
         new_start -= 1;
     }
-    (src_slice, path, low + 1, (new_start, if line_start != line_end { new_end - 1 } else {new_end}))
+    (
+        src_slice,
+        path,
+        low + 1,
+        (
+            new_start,
+            if line_start != line_end {
+                new_end - 1
+            } else {
+                new_end
+            },
+        ),
+    )
 }
 
 impl std::fmt::Display for Error {
