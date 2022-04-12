@@ -33,7 +33,7 @@ pub fn eval(program: &FromProgram, ffi: &Option<FFI>) -> Result<ToValue> {
     }
     // println!("CTX {}", ctx.iter().map(|x| format!("{}", x)).collect::<Vec<String>>().join(","));
     let top_ctx = ctx.clone();
-    eval_term(main.unwrap(), &mut ctx, &top_ctx, ffi)
+    eval_term(main.unwrap(), &mut ctx, &top_ctx, &ffi)
 }
 
 fn eval_term(

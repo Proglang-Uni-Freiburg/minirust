@@ -15,7 +15,7 @@ ast::def_from_to_ast_types! {
     prefix => ast
 }
 
-pub fn transform(program: FromProgram) -> Result<ToProgram> {
+pub fn transform(program: &FromProgram) -> Result<ToProgram> {
     let tag = program.tag.clone();
     let mut _program = vec![];
     _program.extend(program.it().clone());

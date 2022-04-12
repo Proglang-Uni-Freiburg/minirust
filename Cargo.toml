@@ -15,4 +15,7 @@ members = [
   "eval",
   # interpreter executable
   "cli",
+  # tests
+  "tests",
+  "test-macros"
 ]

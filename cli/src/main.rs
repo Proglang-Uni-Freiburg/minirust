@@ -15,10 +15,14 @@ fn main() {
 
     if args.len() < 1 {
         eprintln!("{}", Error::new("expected file path"));
+        std::process::exit(1)
     } else {
         match run(args[1].clone()) {
             Ok(_) => {}
-            Err(e) => eprintln!("{}", e),
+            Err(e) => {
+                eprintln!("{}", e);
+                std::process::exit(1)
+            } 
         }
     }
     if DEBUG {
@@ -32,7 +36,7 @@ fn run<T: AsRef<std::path::Path>>(path: T) -> ast::err::Result<()> {
     if DEBUG {
         println!("PARSED\n{:#?}\n\n", parsed);
     }
-    let debruijn = transform(parsed)?;
+    let debruijn = transform(&parsed)?;
     if DEBUG {
         println!("TRANSFORMED\n{:#?}\n\n", debruijn);
     }

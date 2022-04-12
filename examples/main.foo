@@ -4,20 +4,16 @@ use std::file;
 use std::io;
 use std::proc;
 
-struct A {
-    x: Int,
-}
-
 fn main() {
     match env::args_len() {
         3 => {
             io::println("interpreter executable: " + env::arg(0));
             io::println("interpreted file: " + env::arg(1));
             io::println("first argument: " + env::arg(2));
-        }
+        },
         _ => {
             io::println("provide one argument");
             proc::exit(conv::str_to_int("1"))
         }
-    };
+    }
 }
