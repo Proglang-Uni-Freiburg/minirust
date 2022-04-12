@@ -2,6 +2,7 @@ use std::io;
 use std::env;
 use std::conv;
 use std::proc;
+use std::file; 
 
 fn main() {
     match env::args_len() {
@@ -14,5 +15,5 @@ fn main() {
             io::println("provide one argument");
             proc::exit(conv::str_to_int("1"))
         },
-    }
+    };
 }

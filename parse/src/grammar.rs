@@ -148,7 +148,7 @@ peg::parser! {
             / "fn" spa() i:ident() _ "(" _ ts:lit_sep(",", <lit_tup(":", <pattern()>, <typ()>)>) _ ")" _ "{" __ t:term() __ "}"  _ "\n" __ c:term() { let i_tag = i.tag.clone(); ast::Term::Fun(i, ts, Tag::new(i_tag, ast::Type::Unit), t, c) }
             / "fn" spa() i:ident() _ "(" _ ts:lit_sep(",", <lit_tup(":", <pattern()>, <typ()>)>) _ ")" _ "{" __ t:term() __ "}" { let i_tag = i.tag.clone(); ast::Term::Fun(i, ts, Tag::new(i_tag.clone(), ast::Type::Unit), t, Tag::new(i_tag, ast::Term::Unit)) }
             / i:path() _ v:constructor() { let mut path = i.untag(); ast::Term::Struct(i, path, v) }
-            / "|" _ ts:lit_sep_plus(",", <lit_tup(":", <pattern()>, <typ()>)>) _ "|"  _ "{" __ t:term() __ "}"  { ast::Term::Lam(ts, t) }
+            / "|" _ ts:lit_sep(",", <lit_tup(":", <pattern()>, <typ()>)>) _ "|"  _ t:term()  { ast::Term::Lam(ts, t) }
             / "{" _ ts:lit_sep_plus(",", <lit_tup(":", <ident()>, <term()>)>) _ "}" { ast::Term::Rec(ts) }
             / "(" _ ts:lit_sep_plus(",", <term()>) _ ")" { ast::Term::Tup(ts) }
             / i:i64() { ast::Term::Int(i) }

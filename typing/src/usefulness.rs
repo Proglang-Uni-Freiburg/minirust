@@ -1,4 +1,4 @@
-use ast::err::{Error, Result, CodeRef};
+use ast::err::{CodeRef, Error, Result};
 use ast::tag::{Item, Tag};
 
 use ast::{Debruijn, Pattern, Repr, Variant, _Type};
@@ -478,6 +478,20 @@ pub fn is_exhaustive<T: Item>(
     let mut matrix = vec![];
     let ty = resolve(ty, env).unwrap();
 
+    // cannot have pattern for functions
+    match ty.it() {
+        Type::Fun(_, _) => match pats.it()[0].it() {
+            Pattern::Wildcard | Pattern::Var(_) if pats.it().len() == 1 => {},
+            _ => {
+                return Err(
+                    Error::new("expected variable or wildcard for function binding")
+                        .label(pats, "here"),
+                )
+            }
+        },
+        _ => {}
+    }
+
     let deconstructed_patterns: Vec<_DeconstructedPattern> =
         pats.it().iter().map(|x| deconstruct(x, &ty, env)).collect();
 
@@ -500,7 +514,8 @@ pub fn is_exhaustive<T: Item>(
     is_useful(&matrix, &wildcard, env);
 
     if wildcard[0].it().reachable.get() {
-        return Err(Error::new("non-exhaustive match").label(m, format!("does not cover all constructors of {}", ty)));
+        return Err(Error::new("non-exhaustive match")
+            .label(m, format!("does not cover all constructors of {}", ty)));
     }
 
     for (pat, reachable) in pat_reachable {

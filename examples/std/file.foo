@@ -1,0 +1,21 @@
+struct File {
+    read: () -> Str,
+    write: Str -> ()
+}
+
+fn new(path: Str) -> File {
+    File { 
+        read: || __read(path),
+        write: |content: Str| __write(path, content)
+    }
+}
+
+fn __read(path: Str) -> Str {~
+    use std::fs;
+    fs::read_to_string(path).unwrap()
+~}
+
+fn __write(path: Str, content: Str) {~
+    use std::fs;
+    fs::write(path, content).unwrap()
+~}

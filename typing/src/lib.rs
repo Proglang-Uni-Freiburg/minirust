@@ -104,9 +104,9 @@ fn type_check_top(top: &FromTop, ctx: &Ctx, env: &Ctx) -> Result<()> {
         }
         Top::FFIFun(_, args, _, _) => {
             args.lefts().no_dups()?;
-            if args.len() > 1 {
+            if args.len() > 2 {
                 return Err(
-                    Error::new("too many arguments to ffi function").label(args, "maximum is 1")
+                    Error::new("too many arguments to ffi function").label(args, "maximum is 2")
                 );
             }
             Ok(())
@@ -235,8 +235,8 @@ fn type_of_term(term: &FromTerm, ctx: &Ctx, env: &Env) -> Result<ToType> {
                 }
             }
         }
-        Term::TupProj(tup, int) => type_of_term(tup, ctx, env)?.type_at(int)?,
-        Term::RecProj(rec, id) => type_of_term(rec, ctx, env)?.type_at(id)?,
+        Term::TupProj(tup, int) => resolve(&type_of_term(tup, ctx, env)?, env)?.type_at(int)?,
+        Term::RecProj(rec, id) => resolve(&type_of_term(rec, ctx, env)?, env)?.type_at(id)?,
         Term::Let(pat, t, cnt) => {
             pat.no_dups()?;
             let ty = type_of_term(t, ctx, env)?;
