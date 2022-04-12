@@ -6,7 +6,7 @@ fn println(message: Str) {~
 fn read_line(message: Str) -> Str {~
     use std::io;
     let mut buffer = String::new();
-    io::stdin().read_line(&mut buffer).unwrap();
+    io::stdin().read_line(&mut buffer)?;
     buffer   
 ~}
 
@@ -14,5 +14,5 @@ fn print(message: Str) {~
     use std::io;
     use std::io::Write;
     print!("{}", message);
-    io::stdout().flush().unwrap();
+    io::stdout().flush()?;
 ~}

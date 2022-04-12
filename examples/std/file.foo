@@ -12,10 +12,10 @@ fn new(path: Str) -> File {
 
 fn __read(path: Str) -> Str {~
     use std::fs;
-    fs::read_to_string(path).unwrap()
+    fs::read_to_string(path)?
 ~}
 
 fn __write(path: Str, content: Str) {~
     use std::fs;
-    fs::write(path, content).unwrap()
+    fs::write(path, content)?
 ~}

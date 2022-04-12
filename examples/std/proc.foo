@@ -1,5 +1,5 @@
 fn exit(code: Int) {~
     use std::process;
     use std::convert::TryInto;
-    process::exit(code.try_into().unwrap())
+    process::exit(code.try_into()?)
 ~}

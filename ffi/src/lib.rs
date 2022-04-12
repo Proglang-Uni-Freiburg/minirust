@@ -15,6 +15,8 @@ pub struct FFI {
     lib: Library,
 }
 
+type DynResult<R> = std::result::Result<R, Box<dyn std::error::Error>>;
+
 impl FFI {
     pub fn new(program: &_Program<Debruijn>, env: &Ctx<_Type<Debruijn>>) -> Result<Self> {
         let tmp = std::env::temp_dir().to_str().unwrap().to_string();
@@ -28,7 +30,6 @@ impl FFI {
 
         fs::write(&code_path, program.to_rust(env)?)
             .map_err(|e| Error::new(format!("failed to write module {}", e)))?;
-
         if !Command::new("rustc")
             .arg("--crate-type")
             .arg("dylib")
@@ -64,7 +65,7 @@ impl FFI {
         function: &_Ident<Debruijn>,
         args: &_Vec<Debruijn, (_Value<Debruijn>, _Type<Debruijn>)>,
         ty: &_Type<Debruijn>,
-    ) -> std::result::Result<_Value<Debruijn>, libloading::Error> {
+    ) -> DynResult<_Value<Debruijn>> {
         Ok(function.set(match (args.it().len(), ty.it()) {
             (0, Type::Unit) => {
                 self.call0::<()>(function.it())?;
@@ -97,36 +98,32 @@ impl FFI {
         args: &_Vec<Debruijn, (_Value<Debruijn>, _Type<Debruijn>)>,
         ty: &_Type<Debruijn>,
     ) -> Result<_Value<Debruijn>> {
-        self._call(function, args, ty).map_err(|e| {
-            Error::new("call to ffi function failed with")
-                .label(function, format!("failed with {}", e))
-        })
+        self._call(function, args, ty)
+            .map_err(|e| Error::new("ffi error").label(function, format!("{}", e)))
     }
-    fn call0<R>(&self, function: &String) -> std::result::Result<R, libloading::Error> {
-        unsafe { Ok((self.lib.get::<unsafe fn() -> R>(function.as_bytes())?)()) }
-    }
-    fn call1<T1, R>(&self, function: &String, t1: T1) -> std::result::Result<R, libloading::Error> {
+    fn call0<R>(&self, function: &String) -> DynResult<R> {
         unsafe {
-            Ok((self.lib.get::<unsafe fn(T1) -> R>(function.as_bytes())?)(
-                t1,
-            ))
+            (self
+                .lib
+                .get::<unsafe fn() -> DynResult<R>>(function.as_bytes())?)()
         }
     }
-    fn call2<T1, T2, R>(
-        &self,
-        function: &String,
-        t1: T1,
-        t2: T2,
-    ) -> std::result::Result<R, libloading::Error> {
+    fn call1<T1, R>(&self, function: &String, t1: T1) -> DynResult<R> {
         unsafe {
-            Ok((self
+            (self
                 .lib
-                .get::<unsafe fn(T1, T2) -> R>(function.as_bytes())?)(
-                t1, t2,
-            ))
+                .get::<unsafe fn(T1) -> DynResult<R>>(function.as_bytes())?)(t1)
+        }
+    }
+    fn call2<T1, T2, R>(&self, function: &String, t1: T1, t2: T2) -> DynResult<R> {
+        unsafe {
+            (self
+                .lib
+                .get::<unsafe fn(T1, T2) -> DynResult<R>>(function.as_bytes())?)(t1, t2)
         }
     }
 }
+
 impl Drop for FFI {
     fn drop(&mut self) {
         let src = Path::new(&self.code_path);

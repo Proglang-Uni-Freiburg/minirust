@@ -3,5 +3,5 @@ fn int_to_str(i: Int) -> Str {~
 ~}
 
 fn str_to_int(s: Str) -> Int {~
-    s.parse::<i64>().unwrap()
+    s.parse::<i64>()?
 ~}

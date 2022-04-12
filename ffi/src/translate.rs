@@ -13,7 +13,7 @@ impl ToRustCode for _Program<Debruijn> {
             match top.it() {
                 ast::Top::FFIFun(b, args, ret, code) => out.push_str(
                     format!(
-                        "#[no_mangle]\nfn {}({}) -> {} {{{}}}\n",
+                        "#[no_mangle]\nfn {}({}) -> std::result::Result<{}, Box<dyn std::error::Error>> {{Ok({{{}}})}}\n",
                         b,
                         args.it()
                             .iter()
