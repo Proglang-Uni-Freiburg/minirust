@@ -90,7 +90,7 @@ pub fn type_check(program: &FromProgram) -> Result<Option<FFI>> {
 
 fn type_check_top(top: &FromTop, ctx: &Ctx, env: &Ctx) -> Result<()> {
     match top.it() {
-        Top::Fun(id, args, ret, body) => {
+        Top::Fun(_, args, ret, body) => {
             args.lefts().no_dups()?;
             let mut _ctx = ctx.clone();
             for (pat, ty) in args.it() {

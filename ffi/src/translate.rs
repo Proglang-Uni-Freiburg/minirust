@@ -25,7 +25,8 @@ impl ToRustCode for _Program<Debruijn> {
                     )
                     .as_str(),
                 ),
-                ast::Top::Alias(alias, ty) => {
+                // not useful atm
+                /* ast::Top::Alias(alias, ty) => {
                     out.push_str(format!("type {} = {};\n", alias.it(), ty.to_rust(env)?).as_str())
                 }
                 ast::Top::Struct(s, var) => {
@@ -42,7 +43,7 @@ impl ToRustCode for _Program<Debruijn> {
                             .join(",\n")
                     )
                     .as_str(),
-                ),
+                ), */
                 _ => {}
             }
         }

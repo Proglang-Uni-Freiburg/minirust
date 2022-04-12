@@ -65,7 +65,7 @@ impl FFI {
                 Value::Unit
             }
             (0, Type::Bool) => Value::Bool(self.call0(function.it()).unwrap()),
-            (0, Type::Int) => Value::Bool(self.call0(function.it()).unwrap()),
+            (0, Type::Int) => Value::Int(self.call0(function.it()).unwrap()),
             (0, Type::Str) => Value::Str(self.call0(function.it()).unwrap()),
             (1, Type::Unit) => {
                 match args.it()[0].0.it() {

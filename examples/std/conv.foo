@@ -1,0 +1,7 @@
+fn int_to_str(i: Int) -> Str {~
+    format!("{}", i)
+~}
+
+fn str_to_int(s: Str) -> Int {~
+    s.parse::<i64>().unwrap()
+~}

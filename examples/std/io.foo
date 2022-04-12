@@ -17,14 +17,6 @@ fn print(message: Str) {~
     io::stdout().flush().unwrap();
 ~}
 
-fn exit(code: Int) {~
-    use std::process;
-    use std::convert::TryInto;
-    process::exit(code.try_into().unwrap())
-~}
-
-fn arg(idx: Int) -> Str {~
-    use std::env;
-    use std::convert::TryFrom;
-    env::args().collect::<Vec<String>>()[usize::try_from(idx).unwrap()].clone()
-~}
+enum A {
+    X(Int)
+}

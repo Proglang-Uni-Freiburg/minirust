@@ -5,44 +5,47 @@ use eval::eval;
 use ir::transform;
 use parse::parse;
 use typing::type_check;
+use std::time::Instant;
 
+const DEBUG: bool = true;
 fn main() {
     let args: Vec<String> = env::args().collect();
-    if args.len() <= 1 {
-        eprintln!("{}", Error::new("expected file path as argument"));
+
+    let now = Instant::now();
+
+    if args.len() < 1 {
+        eprintln!("{}", Error::new("expected file path"));
     } else {
-        match run(
-            args[1].clone(),
-            args.iter()
-                .enumerate()
-                .find(|(i, x)| i > &1usize && x == &"--debug")
-                .is_some(),
-        ) {
+        match run(args[1].clone()) {
             Ok(_) => {}
             Err(e) => eprintln!("{}", e),
         }
     }
+    if DEBUG {
+        let elapsed = now.elapsed();
+        println!("took {:.2?}", elapsed);
+    }
 }
 
-fn run<T: AsRef<std::path::Path>>(path: T, debug: bool) -> ast::err::Result<()> {
+fn run<T: AsRef<std::path::Path>>(path: T) -> ast::err::Result<()> {
     let parsed = parse(path.as_ref())?;
-    if debug {
+    if DEBUG {
         println!("PARSED\n{:#?}\n\n", parsed);
     }
     let debruijn = transform(parsed)?;
-    if debug {
+    if DEBUG {
         println!("TRANSFORMED\n{:#?}\n\n", debruijn);
     }
     let mut ffi = type_check(&debruijn)?;
-    if debug {
+    if DEBUG {
         println!("TYPE CHECKING\nsuccessful");
     };
     let value = eval(&debruijn, &mut ffi)?;
-    if debug {
+    if DEBUG {
         println!("RESULT\n{:#?}", value);
     };
     match value.it() {
-        Value::Unit => {},
+        Value::Unit => {}
         _ => println!("{}", value),
     }
     Ok(())

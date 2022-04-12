@@ -20,8 +20,10 @@ foo examples/example.foo
 - `parse`
     - `lib.rs`: file or string parsing
     - `grammar.rs`: actual peg
-- `ir` [soon: resolving imports]
-    - `lib.rs`: debruijn transformation & resolve identical syntax
+- `ir`
+    - `lib.rs`: transform to immediate representation
+    - `debruijn.rs`: debruijn indices
+    - `resolve.rs`: resolving imports
 - `typing`
     - `lib.rs`: type checking
     - `eq.rs`: defines type equality

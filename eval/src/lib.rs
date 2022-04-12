@@ -143,7 +143,6 @@ fn eval_term(
             Value::FFIClos(id, tys, ty) => match ffi {
                 Some(f) => {
                     let apps = map!(eval_term(app, ctx, top_ctx, ffi));
-
                     f.call(
                         id,
                         &app.set(
