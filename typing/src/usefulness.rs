@@ -207,7 +207,7 @@ impl PatternConstructor {
                 .iter()
                 .map(|(x, _)| PatternConstructor::Variant(x.it().clone()))
                 .collect(),
-            _ => unreachable!(),
+            _ => vec![PatternConstructor::NonExhaustive]
         }
     }
     fn split(
@@ -477,20 +477,6 @@ pub fn is_exhaustive<T: Item>(
 ) -> Result<()> {
     let mut matrix = vec![];
     let ty = resolve(ty, env).unwrap();
-
-    // cannot have pattern for functions
-    match ty.it() {
-        Type::Fun(_, _) => match pats.it()[0].it() {
-            Pattern::Wildcard | Pattern::Var(_) if pats.it().len() == 1 => {},
-            _ => {
-                return Err(
-                    Error::new("expected variable or wildcard for function binding")
-                        .label(pats, "here"),
-                )
-            }
-        },
-        _ => {}
-    }
 
     let deconstructed_patterns: Vec<_DeconstructedPattern> =
         pats.it().iter().map(|x| deconstruct(x, &ty, env)).collect();

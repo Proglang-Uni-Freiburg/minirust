@@ -17,5 +17,5 @@ members = [
   "cli",
   # tests
   "tests",
-  "test-macros"
+  "tests/macros"
 ]

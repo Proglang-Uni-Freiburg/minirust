@@ -30,7 +30,7 @@ impl Error {
         self
     }
 
-    pub fn display(&self) -> String {
+    pub fn build(&self, src: Option<String>, color: bool) -> String {
         let mut snip = Snippet {
             title: Some(Annotation {
                 label: Some(self.label.clone()),
@@ -40,16 +40,25 @@ impl Error {
             slices: vec![],
             footer: vec![],
             opt: FormatOptions {
-                color: true,
+                color,
                 ..Default::default()
             },
         };
-        for (code_ref, label) in self.items.iter() {
-            let (source, origin, line, (start, end)) = parse_code_ref(&code_ref);
+        for ((path, (start, end)), label) in self.items.iter() {
+            let path = format!("{}.foo", &path.join("/"));
+            let (source, line, (start, end)) = {
+                match src {
+                    Some(ref s) => parse_err(s.clone(), (start.clone(), end.clone())),
+                    None => {
+                        let src = std::fs::read_to_string(std::path::Path::new(&path)).unwrap();
+                        parse_err(src, (start.clone(), end.clone()))
+                    },
+                }
+            };
             snip.slices.push(Slice {
                 source: source,
                 line_start: line,
-                origin: Some(origin),
+                origin: Some(path),
                 fold: true,
                 annotations: vec![SourceAnnotation {
                     label: label.clone(),
@@ -67,6 +76,10 @@ impl Error {
         }
         let dl = DisplayList::from(snip);
         format!("{}", dl)
+    }
+ 
+    pub fn display(&self) -> String {
+        self.build(None, true)
     }
 }
 
@@ -94,10 +107,7 @@ impl<I: Item> GetCodeRef for Tag<CodeRef, I> {
     }
 }
 
-fn parse_code_ref(code_ref: &CodeRef) -> (String, String, usize, (usize, usize)) {
-    let (path, (start, end)) = code_ref.clone();
-    let path = format!("{}.foo", &path.join("/"));
-    let src = std::fs::read_to_string(std::path::Path::new(&path)).unwrap();
+fn parse_err(src: String, (start, end): (usize, usize)) -> (String, usize, (usize, usize)) {
     // 1 indexed
     let lines = src.lines().into_iter().collect::<Vec<&str>>();
 
@@ -142,7 +152,6 @@ fn parse_code_ref(code_ref: &CodeRef) -> (String, String, usize, (usize, usize))
     }
     (
         src_slice,
-        path,
         low + 1,
         (
             new_start,

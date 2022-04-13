@@ -3,6 +3,7 @@ use std::env;
 use std::file;
 use std::io;
 use std::proc;
+use std::time;
 
 fn main() {
     match env::args_len() {
@@ -15,5 +16,12 @@ fn main() {
             io::println("provide one argument");
             proc::exit(conv::str_to_int("1"))
         }
-    }
+    };
+    let time = time::time_it(||{
+        let file = file::new("/tmp/hallo")
+        file.write("Hello World!");
+        io::println(file.read())
+    })
+    io::println("writing a file takes " + conv::int_to_str(time) + "ms")
 }
+

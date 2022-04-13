@@ -239,7 +239,7 @@ peg::parser! {
         pub rule program() -> Program = precedence! {
             s:position!() t:@ e:position!() { Tag::new((path.clone(), (s, e)), t) }
             --
-            __ ts:(rm(<top()>) ** sep()) __? { ts }
+            __ ts:(rm(<top()>) ** (sep() __)) __? { ts }
         }
     }
 }

@@ -155,21 +155,25 @@ macro_rules! call2 {
     ($self:ident, $args:ident, $function:ident) => {
         match ($args.it()[0].0.it(), $args.it()[1].0.it()) {
             (Value::Unit, Value::Unit) => $self.call2($function.it(), (), ())?,
-            (Value::Unit, Value::Bool(b)) => $self.call2($function.it(), (), b)?,
-            (Value::Unit, Value::Int(i)) => $self.call2($function.it(), (), i)?,
-            (Value::Unit, Value::Str(s)) => $self.call2($function.it(), (), s)?,
-            (Value::Bool(b), Value::Unit) => $self.call2($function.it(), b, ())?,
-            (Value::Bool(b), Value::Bool(b2)) => $self.call2($function.it(), b, b2)?,
-            (Value::Bool(b), Value::Int(i)) => $self.call2($function.it(), b, i)?,
-            (Value::Bool(b), Value::Str(s)) => $self.call2($function.it(), b, s)?,
-            (Value::Int(i), Value::Unit) => $self.call2($function.it(), i, ())?,
-            (Value::Int(i), Value::Bool(b)) => $self.call2($function.it(), i, b)?,
-            (Value::Int(i), Value::Int(i2)) => $self.call2($function.it(), i, i2)?,
-            (Value::Int(i), Value::Str(s)) => $self.call2($function.it(), i, s)?,
-            (Value::Str(s), Value::Unit) => $self.call2($function.it(), s, ())?,
-            (Value::Str(s), Value::Bool(b)) => $self.call2($function.it(), s, b)?,
-            (Value::Str(s), Value::Int(i)) => $self.call2($function.it(), s, i)?,
-            (Value::Str(s), Value::Str(s2)) => $self.call2($function.it(), s, s2)?,
+            (Value::Unit, Value::Bool(b)) => $self.call2($function.it(), (), b.clone())?,
+            (Value::Unit, Value::Int(i)) => $self.call2($function.it(), (), i.clone())?,
+            (Value::Unit, Value::Str(s)) => $self.call2($function.it(), (), s.clone())?,
+            (Value::Bool(b), Value::Unit) => $self.call2($function.it(), b.clone(), ())?,
+            (Value::Bool(b), Value::Bool(b2)) => {
+                $self.call2($function.it(), b.clone(), b2.clone())?
+            }
+            (Value::Bool(b), Value::Int(i)) => $self.call2($function.it(), b.clone(), i.clone())?,
+            (Value::Bool(b), Value::Str(s)) => $self.call2($function.it(), b.clone(), s.clone())?,
+            (Value::Int(i), Value::Unit) => $self.call2($function.it(), i.clone(), ())?,
+            (Value::Int(i), Value::Bool(b)) => $self.call2($function.it(), i.clone(), b.clone())?,
+            (Value::Int(i), Value::Int(i2)) => $self.call2($function.it(), i.clone(), i2.clone())?,
+            (Value::Int(i), Value::Str(s)) => $self.call2($function.it(), i.clone(), s.clone())?,
+            (Value::Str(s), Value::Unit) => $self.call2($function.it(), s.clone(), ())?,
+            (Value::Str(s), Value::Bool(b)) => $self.call2($function.it(), s.clone(), b.clone())?,
+            (Value::Str(s), Value::Int(i)) => $self.call2($function.it(), s.clone(), i.clone())?,
+            (Value::Str(s), Value::Str(s2)) => {
+                $self.call2($function.it(), s.clone(), s2.clone())?
+            }
             _ => unimplemented!(),
         }
     };

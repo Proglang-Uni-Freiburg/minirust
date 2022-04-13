@@ -40,15 +40,14 @@ pub fn type_check(program: &FromProgram) -> Result<Option<FFI>> {
                 if id.it() == "main" {
                     if !matches!(ret.it(), Type::Unit) {
                         return Err(Error::new("main function does not have unit type")
-                        .label(ret, "unexpected type"));
+                            .label(ret, "unexpected type"));
                     }
                     if args.it().len() > 0 {
                         return Err(Error::new("main function with arguments")
-                        .label(args, "unexpected arguments"));
+                            .label(args, "unexpected arguments"));
                     }
                     if main {
-                        return Err(Error::new("duplicated main function")
-                            .label(top, "here"));
+                        return Err(Error::new("duplicated main function").label(top, "here"));
                     }
                     main = true;
                 }
@@ -73,7 +72,7 @@ pub fn type_check(program: &FromProgram) -> Result<Option<FFI>> {
         }
     }
     for top in program.it() {
-       type_check_top(top, &ctx, &env)?;
+        type_check_top(top, &ctx, &env)?;
     }
     if !main {
         return Err(Error::new(format!(
@@ -167,10 +166,10 @@ fn type_of_term(term: &FromTerm, ctx: &Ctx, env: &Env) -> Result<ToType> {
                         }
                     }
                 }
-                BinOp::And | BinOp::Or => match left_ty.eq(&left.set(Type::Int), env) {
+                BinOp::And | BinOp::Or => match left_ty.eq(&left.set(Type::Bool), env) {
                     Ok(_) => Type::Bool,
                     Err(_) => {
-                        return Err(Error::new("expected Int to apply arithmetic operation")
+                        return Err(Error::new("expected Bool to apply arithmetic operation")
                             .label(term, format!("these are {}", left_ty)))
                     }
                 },
@@ -403,7 +402,7 @@ fn types_of_pattern(pat: &FromPattern, ty: &FromType, ctx: &mut Ctx, env: &Env) 
                 _ => {
                     return Err(Error::new("pattern type mismatch")
                         .label(pat, "here")
-                        .label(&ty, format!("want {}", ty)))
+                        .label(&ty, "want"))
                 }
             }
         }
@@ -424,11 +423,7 @@ fn types_of_pattern(pat: &FromPattern, ty: &FromType, ctx: &mut Ctx, env: &Env) 
                         .clone();
                     types_of_pattern_variant(pat, &var, ctx, env)
                 }
-                _ => {
-                    return Err(
-                        Error::new("pattern type mismatch").label(&ty, format!("want {}", ty))
-                    )
-                }
+                _ => return Err(Error::new("pattern type mismatch").label(&ty, "want")),
             }
         }
         Pattern::Unit => unreachable!(),
@@ -437,7 +432,7 @@ fn types_of_pattern(pat: &FromPattern, ty: &FromType, ctx: &mut Ctx, env: &Env) 
             _ => {
                 return Err(Error::new("pattern type mismatch")
                     .label(pat, "here")
-                    .label(&ty, format!("want {}", ty)))
+                    .label(&ty, "want"))
             }
         },
         Pattern::Rec(pats) => match ty.it() {
@@ -445,7 +440,7 @@ fn types_of_pattern(pat: &FromPattern, ty: &FromType, ctx: &mut Ctx, env: &Env) 
             _ => {
                 return Err(Error::new("pattern type mismatch")
                     .label(pat, "here")
-                    .label(&ty, format!("want {}", ty)))
+                    .label(&ty, "want"))
             }
         },
     }

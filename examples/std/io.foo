@@ -3,7 +3,7 @@ fn println(message: Str) {~
     println!("{}", message);
 ~}
 
-fn read_line(message: Str) -> Str {~
+fn readln() -> Str {~
     use std::io;
     let mut buffer = String::new();
     io::stdin().read_line(&mut buffer)?;
