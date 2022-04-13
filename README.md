@@ -3,12 +3,21 @@
 ## what's this
 experimental programming language with algebraic data types and pattern matching inspired by rust
 
-## installation & usage
+## usage
+### install
 ```shell
 git clone https://github.com/Mari-W/foo-lang
 cd foo-lang
 cargo install --path cli
-foo examples/main.foo
+```
+### usage
+```shell
+foo path/to/file/with/main.foo
+```
+### update
+```shell
+git pull 
+cargo install --path cli
 ```
 
 ## structure & crates
@@ -32,13 +41,12 @@ foo examples/main.foo
     - `usefulness.rs`: match exhaustiveness & pattern reachability
 - `ffi`
     - `translate.rs`: translates to rust code
-    - `lib.rs`: compiles & calls rust code
+    - `lib.rs`: dynamically links rust code & provide type safe call interface
 - `eval`
     - `lib.rs`: interpreter
 - `cli`
     - `main.rs`: command line interface binary
-
-## syntax
-```rust
-todo!()
-```
+- `tests`
+    - `macros`: contains compile time interpreter macros
+    - `src`: actual tests
+    - `util`: language util functions 

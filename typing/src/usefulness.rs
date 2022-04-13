@@ -1,20 +1,11 @@
 use ast::err::{CodeRef, Error, Result};
 use ast::tag::{Item, Tag};
-
-use ast::{Debruijn, Pattern, Repr, Variant, _Type};
-use ast::{Term, Type};
 use std::cell::Cell;
 use std::iter::once;
 
-use crate::{resolve, Env};
+use crate::{resolve, Env, Pattern, Type, Variant};
 
 // https://doc.rust-lang.org/nightly/nightly-rustc/rustc_mir_build/thir/pattern/usefulness/index.html
-
-ast::def_from_to_ast_types! {
-    from => Debruijn,
-    to => Debruijn,
-    prefix => ast
-}
 
 #[derive(Debug, Clone)]
 pub enum PatternConstructor {
@@ -28,33 +19,27 @@ pub enum PatternConstructor {
 }
 
 #[derive(Debug, Clone)]
-pub struct DeconstructedPattern {
+pub struct _DeconstructedPattern {
     pub constr: PatternConstructor,
-    pub fields: Vec<_DeconstructedPattern>,
-    pub ty: _Type<Debruijn>,
+    pub fields: Vec<DeconstructedPattern>,
+    pub ty: Type,
     pub reachable: Cell<bool>,
 }
-type _DeconstructedPattern = Tag<<Debruijn as Repr>::Ann, DeconstructedPattern>;
+type DeconstructedPattern = Tag<<ast::Debruijn as ast::Repr>::Ann, _DeconstructedPattern>;
 
-fn deconstruct_variant(
-    pat: &FromPattern,
-    ty: &FromVariant,
-    env: &Env,
-) -> Vec<_DeconstructedPattern> {
-    match pat.it() {
-        Pattern::Unit => vec![],
-        Pattern::Tup(pats) => match ty.it() {
-            Variant::Tup(els) => pats
-                .it()
+fn deconstruct_variant(pat: &Pattern, ty: &Variant, env: &Env) -> Vec<DeconstructedPattern> {
+    match pat.as_ref() {
+        ast::Pattern::Unit => vec![],
+        ast::Pattern::Tup(pats) => match ty.as_ref() {
+            ast::Variant::Tup(els) => pats
                 .iter()
                 .enumerate()
                 .map(|(i, pat)| deconstruct(pat, &resolve(&els.it[i], env).unwrap(), env))
                 .collect(),
             _ => unreachable!(),
         },
-        Pattern::Rec(pats) => match ty.it() {
-            Variant::Rec(fields) => pats
-                .it()
+        ast::Pattern::Rec(pats) => match ty.as_ref() {
+            ast::Variant::Rec(fields) => pats
                 .iter()
                 .map(|(x, pat)| {
                     let f_ty = resolve(
@@ -64,7 +49,7 @@ fn deconstruct_variant(
                     .unwrap();
                     match pat {
                         Some(pat) => deconstruct(pat, &f_ty, env),
-                        None => deconstruct(&x.set(Pattern::Wildcard), &f_ty, env),
+                        None => deconstruct(&x.to(ast::Pattern::Wildcard), &f_ty, env),
                     }
                 })
                 .collect(),
@@ -73,14 +58,14 @@ fn deconstruct_variant(
         _ => unreachable!(),
     }
 }
-fn deconstruct(p: &FromPattern, ty: &FromType, env: &Env) -> _DeconstructedPattern {
+fn deconstruct(p: &Pattern, ty: &Type, env: &Env) -> DeconstructedPattern {
     let ty = resolve(ty, env).unwrap();
-    let (constr, fields) = match p.it() {
-        Pattern::Or(_) => {
-            fn expand(pat: &FromPattern, vec: &mut Vec<FromPattern>) {
-                match pat.it() {
-                    Pattern::Or(pats) => {
-                        for pat in pats.it() {
+    let (constr, fields) = match p.as_ref() {
+        ast::Pattern::Or(_) => {
+            fn expand(pat: &Pattern, vec: &mut Vec<Pattern>) {
+                match pat.as_ref() {
+                    ast::Pattern::Or(pats) => {
+                        for pat in pats.as_ref() {
                             expand(pat, vec);
                         }
                     }
@@ -94,68 +79,65 @@ fn deconstruct(p: &FromPattern, ty: &FromType, env: &Env) -> _DeconstructedPatte
                 pats.iter().map(|x| deconstruct(x, &ty, env)).collect(),
             )
         }
-        Pattern::Wildcard | Pattern::Var(_) => (PatternConstructor::Wildcard, vec![]),
-        Pattern::Const(c) => match ty.it() {
-            Type::Unit => (PatternConstructor::Single, vec![]),
-            Type::Bool => match c.it() {
-                Term::False => (PatternConstructor::IntRange(0, 0), vec![]),
-                Term::True => (PatternConstructor::IntRange(1, 1), vec![]),
+        ast::Pattern::Wildcard | ast::Pattern::Var(_) => (PatternConstructor::Wildcard, vec![]),
+        ast::Pattern::Const(c) => match ty.as_ref() {
+            ast::Type::Unit => (PatternConstructor::Single, vec![]),
+            ast::Type::Bool => match c.as_ref() {
+                ast::Term::False => (PatternConstructor::IntRange(0, 0), vec![]),
+                ast::Term::True => (PatternConstructor::IntRange(1, 1), vec![]),
                 _ => unreachable!(),
             },
-            Type::Int => match c.it() {
-                Term::Int(i) => (
-                    PatternConstructor::IntRange(i.clone().into(), i.clone().into()),
+            ast::Type::Int => match c.as_ref() {
+                ast::Term::Int(i) => (
+                    PatternConstructor::IntRange((*i).into(), (*i).into()),
                     vec![],
                 ),
                 _ => unreachable!(),
             },
-            Type::Str => (PatternConstructor::NonExhaustive, vec![]),
+            ast::Type::Str => (PatternConstructor::NonExhaustive, vec![]),
             _ => unreachable!(),
         },
-        Pattern::Struct(_, _, pat) => match ty.it() {
-            Type::Struct(_, var) => (
+        ast::Pattern::Struct(_, _, pat) => match ty.as_ref() {
+            ast::Type::Struct(_, var) => (
                 PatternConstructor::Single,
                 deconstruct_variant(pat, var, env),
             ),
             _ => unreachable!(),
         },
-        Pattern::Variant(_, _, var_id, pat) => match ty.it() {
-            Type::Enum(_, vars) => {
+        ast::Pattern::Variant(_, _, var_id, pat) => match ty.as_ref() {
+            ast::Type::Enum(_, vars) => {
                 let var = vars
-                    .it()
                     .iter()
                     .find(|(x, _)| x == var_id)
                     .map(|(_, y)| y)
                     .unwrap();
                 (
-                    PatternConstructor::Variant(var_id.it().clone()),
+                    PatternConstructor::Variant(var_id.clone().into()),
                     deconstruct_variant(pat, var, env),
                 )
             }
             _ => unreachable!(),
         },
-        Pattern::Unit => (PatternConstructor::Single, vec![]),
-        Pattern::Tup(pats) => match ty.it() {
-            Type::Tup(els) => (
+        ast::Pattern::Unit => (PatternConstructor::Single, vec![]),
+        ast::Pattern::Tup(pats) => match ty.as_ref() {
+            ast::Type::Tup(els) => (
                 PatternConstructor::Single,
-                pats.it()
-                    .iter()
+                pats.iter()
                     .enumerate()
                     .map(|(i, pat)| deconstruct(pat, &els.it[i].clone(), env))
                     .collect(),
             ),
             _ => unreachable!(),
         },
-        Pattern::Rec(pats) => match ty.it() {
-            Type::Rec(fields) => (
+        ast::Pattern::Rec(pats) => match ty.as_ref() {
+            ast::Type::Rec(fields) => (
                 PatternConstructor::Single,
-                pats.it()
-                    .iter()
+                pats.iter()
                     .map(|(x, pat)| {
                         let f_ty = fields.iter().find(|(y, _)| x == y).map(|(_, t)| t).unwrap();
                         match pat {
-                            Some(pat) => deconstruct(pat, &f_ty, env),
-                            None => deconstruct(&x.set(Pattern::Wildcard), &f_ty, env),
+                            Some(pat) => deconstruct(pat, f_ty, env),
+                            None => deconstruct(&x.to(ast::Pattern::Wildcard), f_ty, env),
                         }
                     })
                     .collect(),
@@ -163,10 +145,10 @@ fn deconstruct(p: &FromPattern, ty: &FromType, env: &Env) -> _DeconstructedPatte
             _ => unreachable!(),
         },
     };
-    p.set(DeconstructedPattern {
+    p.to(_DeconstructedPattern {
         constr,
         fields,
-        ty: ty.clone(),
+        ty,
         reachable: Cell::new(false),
     })
 }
@@ -189,53 +171,49 @@ impl PatternConstructor {
             ),
         }
     }
-    fn all_constructors(&self, ty: &FromType, env: &Env) -> Vec<PatternConstructor> {
+    fn all_constructors(&self, ty: &Type, env: &Env) -> Vec<PatternConstructor> {
         let ty = resolve(ty, env).unwrap();
-        match ty.it() {
-            Type::Unit => vec![PatternConstructor::Single],
-            Type::Bool => vec![PatternConstructor::IntRange(0, 1)],
-            Type::Int => vec![PatternConstructor::IntRange(
+        match ty.as_ref() {
+            ast::Type::Unit => vec![PatternConstructor::Single],
+            ast::Type::Bool => vec![PatternConstructor::IntRange(0, 1)],
+            ast::Type::Int => vec![PatternConstructor::IntRange(
                 (-i64::MAX).into(),
                 i64::MAX.into(),
             )],
-            Type::Str => vec![PatternConstructor::NonExhaustive],
-            Type::Tup(_) => vec![PatternConstructor::Single],
-            Type::Rec(_) => vec![PatternConstructor::Single],
-            Type::Struct(_, _) => vec![PatternConstructor::Single],
-            Type::Enum(_, vars) => vars
-                .it()
+            ast::Type::Str => vec![PatternConstructor::NonExhaustive],
+            ast::Type::Tup(_) => vec![PatternConstructor::Single],
+            ast::Type::Rec(_) => vec![PatternConstructor::Single],
+            ast::Type::Struct(_, _) => vec![PatternConstructor::Single],
+            ast::Type::Enum(_, vars) => vars
+                .as_ref()
                 .iter()
-                .map(|(x, _)| PatternConstructor::Variant(x.it().clone()))
+                .map(|(x, _)| PatternConstructor::Variant(x.as_ref().clone()))
                 .collect(),
-            _ => vec![PatternConstructor::NonExhaustive]
+            _ => vec![PatternConstructor::NonExhaustive],
         }
     }
     fn split(
         &self,
-        others: &Vec<PatternConstructor>,
-        ty: &FromType,
+        others: &[PatternConstructor],
+        ty: &Type,
         env: &Env,
     ) -> Vec<PatternConstructor> {
         match self {
             PatternConstructor::IntRange(lo, hi) if lo != hi => {
-                let included = others
-                    .iter()
-                    .filter_map(|x| match x {
-                        PatternConstructor::IntRange(olo, ohi) => {
-                            if lo <= ohi && olo <= hi {
-                                Some(PatternConstructor::IntRange(
-                                    std::cmp::max(lo.clone(), olo.clone()),
-                                    std::cmp::min(hi.clone(), hi.clone()),
-                                ))
-                            } else {
-                                None
-                            }
+                let included = others.iter().filter_map(|x| match x {
+                    PatternConstructor::IntRange(olo, ohi) => {
+                        if lo <= ohi && olo <= hi {
+                            Some(PatternConstructor::IntRange(
+                                std::cmp::max(*lo, *olo),
+                                std::cmp::min(*hi, *hi),
+                            ))
+                        } else {
+                            None
                         }
-                        _ => None,
-                    })
-                    .collect::<Vec<PatternConstructor>>();
+                    }
+                    _ => None,
+                });
                 let mut borders = included
-                    .into_iter()
                     .flat_map(|range| match range {
                         PatternConstructor::IntRange(lo, hi) => once(lo).chain(once(hi + 1)),
                         _ => unreachable!(),
@@ -253,9 +231,7 @@ impl PatternConstructor {
                     })
                     .filter(|(prev, current)| prev != current)
                     .map(move |(prev, current)| match (prev, current) {
-                        (lo, hi) if lo < hi => {
-                            PatternConstructor::IntRange(lo.clone(), hi.clone() - 1)
-                        }
+                        (lo, hi) if lo < hi => PatternConstructor::IntRange(*lo, *hi - 1),
                         _ => unreachable!(),
                     })
                     .collect();
@@ -265,7 +241,7 @@ impl PatternConstructor {
                 let all = self.all_constructors(ty, env);
                 let all = all
                     .iter()
-                    .map(|c| c.split(&others.clone(), ty, env))
+                    .map(|c| c.split(others, ty, env))
                     .collect::<Vec<Vec<PatternConstructor>>>()
                     .into_iter()
                     .flatten()
@@ -299,9 +275,9 @@ impl PatternConstructor {
     }
 }
 
-impl DeconstructedPattern {
-    fn wildcard(ty: &FromType) -> Self {
-        DeconstructedPattern {
+impl _DeconstructedPattern {
+    fn wildcard(ty: &Type) -> Self {
+        _DeconstructedPattern {
             constr: PatternConstructor::Wildcard,
             fields: vec![],
             ty: ty.clone(),
@@ -310,51 +286,45 @@ impl DeconstructedPattern {
     }
 }
 
-fn specialize_variant_wildcard(var: &FromVariant) -> Vec<_DeconstructedPattern> {
-    match var.it() {
-        Variant::Unit => vec![],
-        Variant::Tup(els) => els
-            .it()
+fn specialize_variant_wildcard(var: &Variant) -> Vec<DeconstructedPattern> {
+    match var.as_ref() {
+        ast::Variant::Unit => vec![],
+        ast::Variant::Tup(els) => els
             .iter()
-            .map(|x| x.set(DeconstructedPattern::wildcard(x)))
+            .map(|x| x.to(_DeconstructedPattern::wildcard(x)))
             .collect(),
-        Variant::Rec(fields) => fields
-            .it()
+        ast::Variant::Rec(fields) => fields
             .iter()
-            .map(|(_, x)| x.set(DeconstructedPattern::wildcard(x)))
+            .map(|(_, x)| x.to(_DeconstructedPattern::wildcard(x)))
             .collect(),
     }
 }
 
 pub fn specialize(
-    pat: &_DeconstructedPattern,
+    pat: &DeconstructedPattern,
     other: &PatternConstructor,
     env: &Env,
-) -> Vec<_DeconstructedPattern> {
-    let pat_constr = pat.it();
+) -> Vec<DeconstructedPattern> {
+    let pat_constr = pat.as_ref();
     let ty = resolve(&pat_constr.ty, env).unwrap();
     match (&pat_constr.constr, other) {
         (PatternConstructor::Wildcard, _) => match other {
-            PatternConstructor::Single => match ty.it() {
-                Type::Tup(els) => els
-                    .it()
+            PatternConstructor::Single => match ty.as_ref() {
+                ast::Type::Tup(els) => els
                     .iter()
-                    .map(|x| x.set(DeconstructedPattern::wildcard(x)))
+                    .map(|x| x.to(_DeconstructedPattern::wildcard(x)))
                     .collect(),
-                Type::Rec(fields) => fields
-                    .it()
+                ast::Type::Rec(fields) => fields
                     .iter()
-                    .map(|(_, x)| x.set(DeconstructedPattern::wildcard(x)))
+                    .map(|(_, x)| x.to(_DeconstructedPattern::wildcard(x)))
                     .collect(),
-                Type::Struct(_, var) => specialize_variant_wildcard(var),
+                ast::Type::Struct(_, var) => specialize_variant_wildcard(var),
                 _ => unreachable!(),
             },
-            PatternConstructor::Variant(var) => match ty.it() {
-                Type::Enum(_, vars) => specialize_variant_wildcard(
-                    &vars
-                        .it()
-                        .iter()
-                        .find(|(x, _)| x.it() == var)
+            PatternConstructor::Variant(var) => match ty.as_ref() {
+                ast::Type::Enum(_, vars) => specialize_variant_wildcard(
+                    vars.iter()
+                        .find(|(x, _)| x.as_ref() == var)
                         .map(|(_, y)| y)
                         .unwrap(),
                 ),
@@ -366,9 +336,10 @@ pub fn specialize(
     }
 }
 
+type Matrix<T> = Vec<Vec<T>>;
 fn is_useful(
-    matrix: &Vec<Vec<_DeconstructedPattern>>,
-    v: &Vec<_DeconstructedPattern>,
+    matrix: &Matrix<DeconstructedPattern>,
+    v: &[DeconstructedPattern],
     env: &Env,
 ) -> bool {
     let row_lens = matrix.iter().map(|row| row.len()).collect::<Vec<usize>>();
@@ -379,62 +350,62 @@ fn is_useful(
         return matrix.is_empty();
     }
 
-    let DeconstructedPattern {
+    let _DeconstructedPattern {
         constr,
         ty,
         reachable: reachable_cell,
         ..
-    } = v[0].it();
+    } = v[0].as_ref();
 
     let mut reachable = false;
 
     // expands an or pattern
-    fn expand(row: &Vec<_DeconstructedPattern>) -> Vec<Vec<_DeconstructedPattern>> {
+    fn expand(row: &[DeconstructedPattern]) -> Matrix<DeconstructedPattern> {
         row[0]
-            .it()
+            .as_ref()
             .fields
             .iter()
             .map(|p| {
                 let mut new_row = vec![p.clone()];
-                let mut row_without_head = row.clone().into_iter();
+                let mut row_without_head = row.iter();
                 row_without_head.next();
-                new_row.extend(row_without_head);
+                new_row.extend(row_without_head.cloned());
                 new_row
             })
-            .collect::<Vec<Vec<_DeconstructedPattern>>>()
+            .collect::<Matrix<DeconstructedPattern>>()
     }
 
     // expand or patterns in matrix
     let matrix = matrix
         .iter()
-        .flat_map(|row| match row[0].it().constr {
+        .flat_map(|row| match row[0].as_ref().constr {
             PatternConstructor::Or => expand(row),
             _ => vec![row.clone()],
         })
-        .collect::<Vec<Vec<_DeconstructedPattern>>>();
+        .collect::<Matrix<DeconstructedPattern>>();
 
     // specializes head of row
     fn specialize_row(
         c: &PatternConstructor,
-        row: &Vec<_DeconstructedPattern>,
+        row: &[DeconstructedPattern],
         env: &Env,
-    ) -> Vec<_DeconstructedPattern> {
+    ) -> Vec<DeconstructedPattern> {
         let mut new_row = specialize(&row[0], c, env);
-        let mut row_without_head = row.clone().into_iter();
+        let mut row_without_head = row.iter();
         row_without_head.next();
-        new_row.extend(row_without_head);
+        new_row.extend(row_without_head.cloned());
         new_row
     }
 
     // specialize all heads of all rows
     fn specialize_matrix(
         c: &PatternConstructor,
-        matrix: &Vec<Vec<_DeconstructedPattern>>,
+        matrix: &Matrix<DeconstructedPattern>,
         env: &Env,
-    ) -> Vec<Vec<_DeconstructedPattern>> {
+    ) -> Matrix<DeconstructedPattern> {
         let mut mat = vec![];
         for row in matrix {
-            if c.is_covered_by(&row[0].it().constr) {
+            if c.is_covered_by(&row[0].as_ref().constr) {
                 mat.push(specialize_row(c, row, env))
             }
         }
@@ -444,7 +415,7 @@ fn is_useful(
     if matches!(constr, PatternConstructor::Or) {
         // expand or pattern
         let mut all_reachable = true;
-        let mut matrix = matrix.clone();
+        let mut matrix = matrix;
         for v in expand(v) {
             all_reachable &= is_useful(&matrix, &v, env);
             matrix.push(v)
@@ -453,7 +424,7 @@ fn is_useful(
     } else {
         let heads = &matrix
             .iter()
-            .map(|row| row[0].it().constr.clone())
+            .map(|row| row[0].as_ref().constr.clone())
             .collect::<Vec<PatternConstructor>>();
         let splitted = constr.split(heads, ty, env);
         for c in splitted {
@@ -470,23 +441,20 @@ fn is_useful(
 }
 
 pub fn is_exhaustive<T: Item>(
-    pats: &FromVec<FromPattern>,
-    ty: &FromType,
+    pats: &crate::Vec<Pattern>,
+    ty: &Type,
     m: &Tag<CodeRef, T>,
     env: &Env,
 ) -> Result<()> {
     let mut matrix = vec![];
     let ty = resolve(ty, env).unwrap();
 
-    let deconstructed_patterns: Vec<_DeconstructedPattern> =
-        pats.it().iter().map(|x| deconstruct(x, &ty, env)).collect();
-
-    let pat_reachable: Vec<(_DeconstructedPattern, bool)> = deconstructed_patterns
-        .into_iter()
+    let deconstructed_patterns = pats.iter().map(|x| deconstruct(x, &ty, env));
+    let pat_reachable: Vec<(DeconstructedPattern, bool)> = deconstructed_patterns
         .map(|x| {
             let v = vec![x];
             is_useful(&matrix, &v, env);
-            let (reachable, pat) = (v[0].it().reachable.get(), v[0].clone());
+            let (reachable, pat) = (v[0].as_ref().reachable.get(), v[0].clone());
             matrix.push(v);
             (pat, reachable)
         })
@@ -494,19 +462,19 @@ pub fn is_exhaustive<T: Item>(
 
     let wildcard = vec![Tag::new(
         (vec![], (0, 0)),
-        DeconstructedPattern::wildcard(&ty),
+        _DeconstructedPattern::wildcard(&ty),
     )];
 
     is_useful(&matrix, &wildcard, env);
 
-    if wildcard[0].it().reachable.get() {
+    if wildcard[0].as_ref().reachable.get() {
         return Err(Error::new("non-exhaustive match")
             .label(m, format!("does not cover all constructors of {}", ty)));
     }
 
     for (pat, reachable) in pat_reachable {
         if !reachable {
-            match pat.it().constr {
+            match pat.as_ref().constr {
                 PatternConstructor::Or => {
                     return Err(
                         Error::new("unreachable branch").label(&pat, "has unreachable branch")

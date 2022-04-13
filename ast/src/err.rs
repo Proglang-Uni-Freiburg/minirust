@@ -12,6 +12,12 @@ pub struct Error {
     footer: Vec<String>,
 }
 
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.display())
+    }
+}
+
 impl Error {
     pub fn new<T: Into<String>>(label: T) -> Self {
         Error {
@@ -48,15 +54,15 @@ impl Error {
             let path = format!("{}.foo", &path.join("/"));
             let (source, line, (start, end)) = {
                 match src {
-                    Some(ref s) => parse_err(s.clone(), (start.clone(), end.clone())),
+                    Some(ref s) => parse_err(s.clone(), (*start, *end)),
                     None => {
                         let src = std::fs::read_to_string(std::path::Path::new(&path)).unwrap();
-                        parse_err(src, (start.clone(), end.clone()))
+                        parse_err(src, (*start, *end))
                     },
                 }
             };
             snip.slices.push(Slice {
-                source: source,
+                source,
                 line_start: line,
                 origin: Some(path),
                 fold: true,
@@ -162,10 +168,4 @@ fn parse_err(src: String, (start, end): (usize, usize)) -> (String, usize, (usiz
             },
         ),
     )
-}
-
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.display())
-    }
 }

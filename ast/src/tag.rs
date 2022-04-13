@@ -19,21 +19,13 @@ impl<T: Item, I: Item> Tag<T, I> {
             it: Box::new(it),
         }
     }
-
-    pub fn into_tag(self) -> T {
-        self.tag.clone()
-    }
-    pub fn into_it(self) -> I {
+    pub fn into(self) -> I {
         *self.it
     }
-    pub fn tag(&self) -> &T {
-        &self.tag
-    }
-    pub fn it(&self) -> &I {
+    pub fn as_ref(&self) -> &I {
         &*self.it
     }
-
-    pub fn set<J: Item>(&self, j: J) -> Tag<T, J> {
+    pub fn to<J: Item>(&self, j: J) -> Tag<T, J> {
         Tag::new(self.tag.clone(), j)
     }
 }
@@ -54,13 +46,42 @@ macro_rules! map {
 
 impl<T: Item, I: Item> Debug for Tag<T, I> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:#?}", self.it())
+        write!(f, "{:#?}", self.as_ref())
     }
 }
 
 impl<T: Item, I: Item + Display> Display for Tag<T, I> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.it())
+        write!(f, "{}", self.as_ref())
+    }
+}
+
+impl<T: Item, I: Item + IntoIterator> IntoIterator for Tag<T, I> {
+    type Item = I::Item;
+
+    type IntoIter = I::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.it.into_iter()
+    }
+}
+
+pub struct Iter<'a, I>(std::slice::Iter<'a, I>);
+impl<'a, I> Iterator for Iter<'a, I> {
+    type Item = &'a I;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next()
+    }
+}
+
+impl<'a, T: Item, I: Item> IntoIterator for &'a Tag<T, std::vec::Vec<I>> {
+    type Item = &'a I;
+
+    type IntoIter = Iter<'a, I>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        Iter(self.as_ref().iter())
     }
 }
 
@@ -68,25 +89,37 @@ impl<T: Item, I: Item> Deref for Tag<T, I> {
     type Target = I;
 
     fn deref(&self) -> &Self::Target {
-        self.it()
+        &*self.it
     }
 }
 
-impl<T: Item> Into<String> for Tag<T, String> {
+impl<T: Item, I: Item + Into<String>> Into<String> for Tag<T, I> {
     fn into(self) -> String {
-        self.into_it()
+        self.into().into()
     }
 }
 
-impl<T: Item> Into<usize> for Tag<T, usize> {
+impl<T: Item, I: Item + Into<usize>> Into<usize> for Tag<T, I> {
     fn into(self) -> usize {
-        self.into_it()
+        self.into().into()
+    }
+}
+
+impl<'a, T: Item> Into<usize> for &'a Tag<T, usize> {
+    fn into(self) -> usize {
+        *self.it.clone()
+    }
+}
+
+impl<'a, T: Item> Into<usize> for &'a Tag<T, i64> {
+    fn into(self) -> usize {
+        usize::try_from(&*self).unwrap()
     }
 }
 
 impl<T: Item, I: Item + PartialEq> PartialEq for Tag<T, I> {
     fn eq(&self, other: &Self) -> bool {
-        self.it() == other.it()
+        self.it == other.it
     }
 }
 
@@ -111,7 +144,7 @@ impl<T: Item, J: Item, V: Item, K: Item, L: Item>
         &self,
         f: &mut F,
     ) -> Result<Tag<T, Tag<K, L>>> {
-        Ok(Tag::new(self.tag.clone(), self.it().map_tag(f)?))
+        Ok(Tag::new(self.tag.clone(), self.as_ref().map_tag(f)?))
     }
 }
 
@@ -123,7 +156,7 @@ impl<T: Item, J: Item, V: Item, K: Item, L: Item>
         &self,
         f: &mut F,
     ) -> Result<Tag<T, Vec<Tag<K, L>>>> {
-        Ok(Tag::new(self.tag.clone(), self.it().map_tag(f)?))
+        Ok(Tag::new(self.tag.clone(), self.as_ref().map_tag(f)?))
     }
 }
 
@@ -135,7 +168,7 @@ impl<T: Item, J: Item, V: Item, K: Item, L: Item, A: Item>
         &self,
         f: &mut F,
     ) -> Result<Tag<T, Vec<(A, Tag<K, L>)>>> {
-        Ok(Tag::new(self.tag.clone(), self.it().map_tag(f)?))
+        Ok(Tag::new(self.tag.clone(), self.as_ref().map_tag(f)?))
     }
 }
 
@@ -147,7 +180,7 @@ impl<T: Item, J: Item, V: Item, K: Item, L: Item, A: Item>
         &self,
         f: &mut F,
     ) -> Result<Tag<T, Vec<(A, Option<Tag<K, L>>)>>> {
-        Ok(Tag::new(self.tag.clone(), self.it().map_tag(f)?))
+        Ok(Tag::new(self.tag.clone(), self.as_ref().map_tag(f)?))
     }
 }
 
@@ -205,7 +238,6 @@ impl<T: Item, I: Item, V: Item, J: Item, A: Clone>
     }
 }
 
-
 // un tagging nested tags
 
 pub trait Untag<T> {
@@ -214,26 +246,26 @@ pub trait Untag<T> {
 
 impl<T: Item, V: Item, J: Item> Untag<J> for Tag<T, Tag<V, J>> {
     fn untag(&self) -> J {
-        self.it().it().clone()
+        self.as_ref().as_ref().clone()
     }
 }
 
 impl<T: Item, I: Item> Untag<Vec<I>> for Vec<Tag<T, I>> {
     fn untag(&self) -> Vec<I> {
-        self.iter().map(|t| t.it().clone()).collect()
+        self.iter().map(|t| t.as_ref().clone()).collect()
     }
 }
 
 impl<T: Item, V: Item, J: Item> Untag<Vec<J>> for Tag<T, Vec<Tag<V, J>>> {
     fn untag(&self) -> Vec<J> {
-        self.it().iter().map(|t| t.it().clone()).collect()
+        self.as_ref().iter().map(|t| t.as_ref().clone()).collect()
     }
 }
 
 impl<T: Item, I: Item, V: Item, J: Item> Untag<Vec<(I, J)>> for Vec<(Tag<T, I>, Tag<V, J>)> {
     fn untag(&self) -> Vec<(I, J)> {
         self.iter()
-            .map(|(l, r)| (l.it().clone(), r.it().clone()))
+            .map(|(l, r)| (l.as_ref().clone(), r.as_ref().clone()))
             .collect()
     }
 }
@@ -256,9 +288,9 @@ impl<L: Item, R: Item> Split<Vec<L>, Vec<R>> for Vec<(L, R)> {
 
 impl<T: Item, L: Item, R: Item> Split<Tag<T, Vec<L>>, Tag<T, Vec<R>>> for Tag<T, Vec<(L, R)>> {
     fn lefts(&self) -> Tag<T, Vec<L>> {
-        self.set(self.it().iter().map(|(t, _)| t.clone()).collect())
+        self.to(self.as_ref().iter().map(|(t, _)| t.clone()).collect())
     }
     fn rights(&self) -> Tag<T, Vec<R>> {
-        self.set(self.it().iter().map(|(_, v)| v.clone()).collect())
+        self.to(self.as_ref().iter().map(|(_, v)| v.clone()).collect())
     }
 }

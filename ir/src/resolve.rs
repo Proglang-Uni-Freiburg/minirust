@@ -1,18 +1,14 @@
 use ast::err::Result;
 use ast::tag::Untag;
-use ast::{Path, Top};
+use ast::Path;
 use parse::parse;
 
-ast::def_from_to_ast_types! {
-    from => Named,
-    to => Debruijn,
-    prefix => ast
-}
+use crate::FromTop;
 
 pub fn resolve(program: &mut Vec<FromTop>, top: &Vec<FromTop>, used: &mut Vec<Path>) -> Result<()> {
     for top in top {
-        match top.it() {
-            Top::Use(path) => {
+        match top.as_ref() {
+            ast::Top::Use(path) => {
                 let mut path = path.untag();
                 let mut new_path = top.tag.0.clone();
                 new_path.pop();
@@ -23,8 +19,8 @@ pub fn resolve(program: &mut Vec<FromTop>, top: &Vec<FromTop>, used: &mut Vec<Pa
                         "{}.foo",
                         new_path.join("/")
                     )))?;
-                    resolve(program, new_program.it(), used)?;
-                    program.extend(new_program.into_it());
+                    resolve(program, new_program.as_ref(), used)?;
+                    program.extend(new_program.into());
                 }
             }
             _ => continue,

@@ -2,10 +2,17 @@ mod grammar;
 
 use std::fs::read_to_string;
 
-use ast::{self, Named};
-use ast::{_Program, err::Error, err::Result, tag::Tag};
+use ast::{
+    err::{Error, Result},
+    tag::Tag,
+};
 
-pub fn parse<T: AsRef<std::path::Path>>(path: T) -> Result<_Program<Named>> {
+ast::def_ast_types! {
+    type => Named,
+    prefix => ast
+}
+
+pub fn parse<T: AsRef<std::path::Path>>(path: T) -> Result<Program> {
     let ast_path: ast::Path = path
         .as_ref()
         .with_extension("")
@@ -22,7 +29,7 @@ pub fn parse<T: AsRef<std::path::Path>>(path: T) -> Result<_Program<Named>> {
     parse_string(src, ast_path)
 }
 
-pub fn parse_string(src: String, path: ast::Path) -> Result<_Program<Named>> {
+pub fn parse_string(src: String, path: ast::Path) -> Result<Program> {
     let src = src
         .trim_end_matches(&['\n', ' ', '\t', '\r'] as &[_])
         .trim_start_matches(&['\n', ' ', '\t', '\r'] as &[_]);

@@ -1,9 +1,7 @@
 use ast::ctx::{self, Ctx};
 use ast::err::{Error, GetCodeRef, Result};
-use ast::tag::{MapTag, Tag, Untag};
-use ast::{map, path};
-use ast::{Constructor, Path, Pattern, Variant};
-use ast::{Term, Top, Type};
+use ast::tag::{MapTag, Untag};
+use ast::{map, path, Constructor, Path};
 
 ast::def_from_to_ast_types! {
     from => Named,
@@ -32,13 +30,13 @@ pub fn debruijn_program(
     ctx: &mut Ctx<Path>,
     env: &mut Ctx<Path>,
 ) -> Result<ToProgram> {
-    for top in program.it() {
-        match top.it() {
-            Top::FFIFun(bind, _, _, _) => ctx.insert(path![bind]),
-            Top::Fun(bind, _, _, _) => ctx.insert(path![bind]),
-            Top::Alias(bind, _) => env.insert(path![bind]),
-            Top::Struct(bind, _) => env.insert(path![bind]),
-            Top::Enum(bind, _) => env.insert(path![bind]),
+    for top in program {
+        match top.as_ref() {
+            ast::Top::FFIFun(bind, _, _, _) => ctx.insert(path![bind]),
+            ast::Top::Fun(bind, _, _, _) => ctx.insert(path![bind]),
+            ast::Top::Alias(bind, _) => env.insert(path![bind]),
+            ast::Top::Struct(bind, _) => env.insert(path![bind]),
+            ast::Top::Enum(bind, _) => env.insert(path![bind]),
             _ => unreachable!(),
         }
     }
@@ -47,14 +45,13 @@ pub fn debruijn_program(
 }
 
 fn debruijn_top(top: &FromTop, ctx: &Ctx<Path>, env: &Ctx<Path>) -> Result<ToTop> {
-    Ok(top.set(match top.it() {
-        Top::Fun(bind, args, ty, body) => {
+    Ok(top.to(match top.as_ref() {
+        ast::Top::Fun(bind, args, ty, body) => {
             let mut _ctx = ctx.clone();
-            Top::Fun(
+            ast::Top::Fun(
                 bind.clone(),
-                args.set(
-                    args.it()
-                        .iter()
+                args.to(
+                    args.iter()
                         .map(|(pat, t)| {
                             Ok((
                                 map!(debruijn_pattern(pat, &mut _ctx, env)),
@@ -67,30 +64,33 @@ fn debruijn_top(top: &FromTop, ctx: &Ctx<Path>, env: &Ctx<Path>) -> Result<ToTop
                 map!(debruijn_term(body, &_ctx, env)),
             )
         }
-        Top::FFIFun(bind, args, ty, body) => Top::FFIFun(
+        ast::Top::FFIFun(bind, args, ty, body) => ast::Top::FFIFun(
             bind.clone(),
             map!(debruijn_type(args, env)),
             map!(debruijn_type(ty, env)),
             body.clone(),
         ),
-        Top::Alias(bind, ty) => Top::Alias(bind.clone(), map!(debruijn_type(ty, env))),
-        Top::Struct(bind, body) => Top::Struct(bind.clone(), map!(debruijn_variant(body, env))),
-        Top::Enum(bind, body) => Top::Enum(bind.clone(), map!(debruijn_variant(body, env))),
+        ast::Top::Alias(bind, ty) => ast::Top::Alias(bind.clone(), map!(debruijn_type(ty, env))),
+        ast::Top::Struct(bind, body) => {
+            ast::Top::Struct(bind.clone(), map!(debruijn_variant(body, env)))
+        }
+        ast::Top::Enum(bind, body) => {
+            ast::Top::Enum(bind.clone(), map!(debruijn_variant(body, env)))
+        }
         _ => unreachable!(),
     }))
 }
 
 fn debruijn_type(typ: &FromType, env: &Ctx<Path>) -> Result<ToType> {
-    Ok(typ.set(match typ.it() {
-        Type::Var(id) => Type::Var(id.set(ctx_resolve(env, id)?)),
-        Type::Unit => Type::Unit,
-        Type::Bool => Type::Bool,
-        Type::Int => Type::Int,
-        Type::Str => Type::Str,
-        Type::Tup(els) => Type::Tup(map!(debruijn_type(els, env))),
-        // Type::Sum(els) => Type::Sum(map!(debruijn_type(els, env))),
-        Type::Rec(fields) => Type::Rec(map!(debruijn_type(fields, env))),
-        Type::Fun(in_tys, out_ty) => Type::Fun(
+    Ok(typ.to(match typ.as_ref() {
+        ast::Type::Var(id) => ast::Type::Var(id.to(ctx_resolve(env, id)?)),
+        ast::Type::Unit => ast::Type::Unit,
+        ast::Type::Bool => ast::Type::Bool,
+        ast::Type::Int => ast::Type::Int,
+        ast::Type::Str => ast::Type::Str,
+        ast::Type::Tup(els) => ast::Type::Tup(map!(debruijn_type(els, env))),
+        ast::Type::Rec(fields) => ast::Type::Rec(map!(debruijn_type(fields, env))),
+        ast::Type::Fun(in_tys, out_ty) => ast::Type::Fun(
             map!(debruijn_type(in_tys, env)),
             map!(debruijn_type(out_ty, env)),
         ),
@@ -99,36 +99,35 @@ fn debruijn_type(typ: &FromType, env: &Ctx<Path>) -> Result<ToType> {
 }
 
 fn debruijn_term(term: &FromTerm, ctx: &Ctx<Path>, env: &Ctx<Path>) -> Result<ToTerm> {
-    Ok(term.set(match term.it() {
-        Term::Unit => Term::Unit,
-        Term::True => Term::True,
-        Term::False => Term::False,
-        Term::Int(i) => Term::Int(i.clone()),
-        Term::Str(s) => Term::Str(s.clone()),
-        Term::Tup(els) => Term::Tup(map!(debruijn_term(els, ctx, env))),
-        Term::Rec(fields) => Term::Rec(map!(debruijn_term(fields, ctx, env))),
-        Term::Var(id) => {
+    Ok(term.to(match term.as_ref() {
+        ast::Term::Unit => ast::Term::Unit,
+        ast::Term::True => ast::Term::True,
+        ast::Term::False => ast::Term::False,
+        ast::Term::Int(i) => ast::Term::Int(*i),
+        ast::Term::Str(s) => ast::Term::Str(s.clone()),
+        ast::Term::Tup(els) => ast::Term::Tup(map!(debruijn_term(els, ctx, env))),
+        ast::Term::Rec(fields) => ast::Term::Rec(map!(debruijn_term(fields, ctx, env))),
+        ast::Term::Var(id) => {
             match ctx_resolve(ctx, id) {
-                Ok(i) => Term::Var(id.set(i)),
+                Ok(i) => ast::Term::Var(id.to(i)),
                 // might be a enum / struct unit variant call (no syntactical difference)
                 Err(_) => debruijn_term(
-                    &term.set(Term::Struct(
+                    &(term.to(ast::Term::Struct(
                         id.clone(),
                         id.untag(),
-                        Tag::new(id.it().last().unwrap().tag.clone(), Constructor::Unit),
-                    )),
+                        id.iter().last().unwrap().to(Constructor::Unit),
+                    ))),
                     ctx,
                     env,
                 )?
-                .into_it(),
+                .into(),
             }
         }
-        Term::Lam(args, body) => {
+        ast::Term::Lam(args, body) => {
             let mut _ctx = ctx.clone();
-            Term::Lam(
-                args.set(
-                    args.it()
-                        .iter()
+            ast::Term::Lam(
+                args.to(
+                    args.iter()
                         .map(|(pat, t)| {
                             Ok((
                                 map!(debruijn_pattern(pat, &mut _ctx, env)),
@@ -140,55 +139,56 @@ fn debruijn_term(term: &FromTerm, ctx: &Ctx<Path>, env: &Ctx<Path>) -> Result<To
                 map!(debruijn_term(body, &_ctx, env)),
             )
         }
-        Term::Seq(left, right) => Term::Seq(
+        ast::Term::Seq(left, right) => ast::Term::Seq(
             map!(debruijn_term(left, ctx, env)),
             map!(debruijn_term(right, ctx, env)),
         ),
-        Term::App(fun, args) => {
+        ast::Term::App(fun, args) => {
             let f = map!(debruijn_term(fun, ctx, env));
             let a = map!(debruijn_term(args, ctx, env));
-            match f.it() {
+            match f.as_ref() {
                 // might be a enum / struct tup variant call (no syntactical difference)
-                Term::Enum(i, path, var, _) if args.it().len() > 0 => Term::Enum(
+                ast::Term::Enum(i, path, var, _) if args.iter().count() > 0 => ast::Term::Enum(
                     i.clone(),
                     path.clone(),
                     var.clone(),
-                    a.set(Constructor::Tup(a.clone())),
+                    a.to(Constructor::Tup(a.clone())),
                 ),
-                Term::Struct(i, path, _) if args.it().len() > 0 => {
-                    Term::Struct(i.clone(), path.clone(), a.set(Constructor::Tup(a.clone())))
-                }
-                _ => Term::App(f, a),
+                ast::Term::Struct(i, path, _) if args.iter().count() > 0 => ast::Term::Struct(
+                    i.clone(),
+                    path.clone(),
+                    a.to(Constructor::Tup(a.clone())),
+                ),
+                _ => ast::Term::App(f, a),
             }
         }
-        Term::Let(pat, body, cnt) => {
+        ast::Term::Let(pat, body, cnt) => {
             let mut _ctx = ctx.clone();
             let pat = map!(debruijn_pattern(pat, &mut _ctx, env));
-            match body.it() {
-                Term::Seq(left, right) => Term::Let(
+            match body.as_ref() {
+                ast::Term::Seq(left, right) => ast::Term::Let(
                     pat,
                     map!(debruijn_term(left, ctx, env)),
                     map!(debruijn_term(right, &_ctx, env)),
                 ),
-                _ => Term::Let(
+                _ => ast::Term::Let(
                     pat,
                     map!(debruijn_term(body, ctx, env)),
                     map!(debruijn_term(cnt, &_ctx, env)),
                 ),
             }
         }
-        Term::Assign(var, t, cnt) => Term::Assign(
-            var.set(ctx_resolve(ctx, var)?),
+        ast::Term::Assign(var, t, cnt) => ast::Term::Assign(
+            var.to(ctx_resolve(ctx, var)?),
             map!(debruijn_term(t, ctx, env)),
             map!(debruijn_term(cnt, ctx, env)),
         ),
-        Term::Fun(bind, args, ty, body, cnt) => {
+        ast::Term::Fun(bind, args, ty, body, cnt) => {
             let mut _ctx = ctx.clone();
-            Term::Fun(
+            ast::Term::Fun(
                 bind.clone(),
-                args.set(
-                    args.it()
-                        .iter()
+                args.to(
+                    args.iter()
                         .map(|(pat, t)| {
                             Ok((
                                 map!(debruijn_pattern(pat, &mut _ctx, env)),
@@ -202,51 +202,54 @@ fn debruijn_term(term: &FromTerm, ctx: &Ctx<Path>, env: &Ctx<Path>) -> Result<To
                 map!(debruijn_term(cnt, &ctx.mutate(path![bind]), env)),
             )
         }
-        Term::BinOp(left, op, right) => Term::BinOp(
+        ast::Term::BinOp(left, op, right) => ast::Term::BinOp(
             map!(debruijn_term(left, ctx, env)),
             op.clone(),
             map!(debruijn_term(right, ctx, env)),
         ),
-        Term::UnOp(op, t) => Term::UnOp(op.clone(), map!(debruijn_term(t, ctx, env))),
-        Term::Struct(id, path, constr) => {
+        ast::Term::UnOp(op, t) => ast::Term::UnOp(op.clone(), map!(debruijn_term(t, ctx, env))),
+        ast::Term::Struct(id, path, constr) => {
             match ctx_resolve(env, id) {
-                Ok(i) => Term::Struct(
-                    id.set(i),
+                Ok(i) => ast::Term::Struct(
+                    id.to(i),
                     path.clone(),
                     map!(debruijn_constructor(constr, ctx, env)),
                 ),
                 // might be a enum rec variant call (no syntactical difference)
                 Err(_) => {
                     if path.len() > 1 {
-                        let mut oid = id.clone().into_it();
+                        let mut oid = id.clone().into();
                         let variant = oid.pop().unwrap();
                         let path = oid.untag();
-                        // let oid = oid.pop().unwrap();
                         debruijn_term(
-                            &term.set(Term::Enum(id.set(oid), path, variant, constr.clone())),
+                            &(term.to(ast::Term::Enum(
+                                id.to(oid),
+                                path,
+                                variant,
+                                constr.clone(),
+                            ))),
                             ctx,
                             env,
                         )?
-                        .into_it()
+                        .into()
                     } else {
                         return Err(Error::new("unresolved identifier").label(id, "not found"));
                     }
                 }
             }
         }
-        Term::Enum(id, path, var, constr) => Term::Enum(
-            id.set(ctx_resolve(env, id)?),
+        ast::Term::Enum(id, path, var, constr) => ast::Term::Enum(
+            id.to(ctx_resolve(env, id)?),
             path.clone(),
             var.clone(),
             map!(debruijn_constructor(constr, ctx, env)),
         ),
-        Term::TupProj(t, i) => Term::TupProj(map!(debruijn_term(t, ctx, env)), i.clone()),
-        Term::RecProj(t, s) => Term::RecProj(map!(debruijn_term(t, ctx, env)), s.clone()),
-        Term::Match(t, arms) => Term::Match(
+        ast::Term::TupProj(t, i) => ast::Term::TupProj(map!(debruijn_term(t, ctx, env)), i.clone()),
+        ast::Term::RecProj(t, s) => ast::Term::RecProj(map!(debruijn_term(t, ctx, env)), s.clone()),
+        ast::Term::Match(t, arms) => ast::Term::Match(
             map!(debruijn_term(t, ctx, env)),
-            arms.set(
-                arms.it()
-                    .iter()
+            arms.to(
+                arms.iter()
                     .map(|(pat, t)| {
                         let mut _ctx = ctx.clone();
                         Ok((
@@ -261,10 +264,10 @@ fn debruijn_term(term: &FromTerm, ctx: &Ctx<Path>, env: &Ctx<Path>) -> Result<To
 }
 
 fn debruijn_variant(var: &FromVariant, env: &Ctx<Path>) -> Result<ToVariant> {
-    Ok(var.set(match var.it() {
-        Variant::Unit => Variant::Unit,
-        Variant::Tup(els) => Variant::Tup(map!(debruijn_type(els, env))),
-        Variant::Rec(fields) => Variant::Rec(map!(debruijn_type(fields, env))),
+    Ok(var.to(match var.as_ref() {
+        ast::Variant::Unit => ast::Variant::Unit,
+        ast::Variant::Tup(els) => ast::Variant::Tup(map!(debruijn_type(els, env))),
+        ast::Variant::Rec(fields) => ast::Variant::Rec(map!(debruijn_type(fields, env))),
     }))
 }
 
@@ -273,7 +276,7 @@ fn debruijn_constructor(
     ctx: &Ctx<Path>,
     env: &Ctx<Path>,
 ) -> Result<ToConstructor> {
-    Ok(constr.set(match constr.it() {
+    Ok(constr.to(match constr.as_ref() {
         Constructor::Unit => Constructor::Unit,
         Constructor::Tup(els) => Constructor::Tup(map!(debruijn_term(els, ctx, env))),
         Constructor::Rec(fields) => Constructor::Rec(map!(debruijn_term(fields, ctx, env))),
@@ -281,15 +284,15 @@ fn debruijn_constructor(
 }
 
 fn debruijn_pattern(pat: &FromPattern, ctx: &mut Ctx<Path>, env: &Ctx<Path>) -> Result<ToPattern> {
-    Ok(pat.set(match pat.it() {
-        Pattern::Wildcard => Pattern::Wildcard,
-        Pattern::Var(id) => {
+    Ok(pat.to(match pat.as_ref() {
+        ast::Pattern::Wildcard => ast::Pattern::Wildcard,
+        ast::Pattern::Var(id) => {
             ctx.insert(path![id]);
-            Pattern::Var(id.clone())
+            ast::Pattern::Var(id.clone())
         }
-        Pattern::Or(pats) => {
+        ast::Pattern::Or(pats) => {
             let mut _ctx = Ctx::default();
-            let mut iter = pats.it().clone().into_iter();
+            let mut iter = pats.clone().into_iter();
             let first = iter.next().unwrap();
             debruijn_pattern(&first, &mut _ctx, env)?;
             for other in iter {
@@ -321,50 +324,53 @@ fn debruijn_pattern(pat: &FromPattern, ctx: &mut Ctx<Path>, env: &Ctx<Path>) -> 
                 }
             }
             debruijn_pattern(&first, ctx, env)?;
-            Pattern::Or(map!(debruijn_pattern(pats, ctx, env)))
+            ast::Pattern::Or(map!(debruijn_pattern(pats, ctx, env)))
         }
-        Pattern::Struct(id, path, pat) => {
+        ast::Pattern::Struct(id, path, pat) => {
             match ctx_resolve(env, id) {
-                Ok(i) => Pattern::Struct(
-                    id.set(i),
+                Ok(i) => ast::Pattern::Struct(
+                    id.to(i),
                     path.clone(),
                     map!(debruijn_pattern(pat, ctx, env)),
                 ),
                 // might be variant pattern or variable
                 Err(_) => {
-                    if id.it().len() > 1 {
-                        let mut oid = id.clone().into_it();
+                    if id.iter().count() > 1 {
+                        let mut oid = id.clone().into();
                         let variant = oid.pop().unwrap();
                         let np = oid.untag();
-                        // let oid = oid.pop().unwrap();
                         debruijn_pattern(
-                            &pat.set(Pattern::Variant(id.set(oid), np, variant, pat.clone())),
-                            ctx,
-                            env,
-                        )?
-                        .into_it()
-                    } else if let Pattern::Unit = pat.it() {
-                        debruijn_pattern(
-                            &pat.set(Pattern::Var(
-                                id.clone().into_it().into_iter().next().unwrap(),
+                            &pat.to(ast::Pattern::Variant(
+                                id.to(oid),
+                                np,
+                                variant,
+                                pat.clone(),
                             )),
                             ctx,
                             env,
                         )?
-                        .into_it()
+                        .into()
+                    } else if let ast::Pattern::Unit = pat.as_ref() {
+                        debruijn_pattern(
+                            &pat.to(ast::Pattern::Var(
+                                id.clone().into_iter().next().unwrap(),
+                            )),
+                            ctx,
+                            env,
+                        )?
+                        .into()
                     } else {
                         return Err(Error::new("unresolved identifier").label(id, "not found"));
                     }
                 }
             }
         }
-        Pattern::Const(t) => Pattern::Const(debruijn_term(t, ctx, env)?),
-        Pattern::Unit => Pattern::Unit,
-        Pattern::Tup(els) => Pattern::Tup(map!(debruijn_pattern(els, ctx, env))),
-        Pattern::Rec(fields) => Pattern::Rec(
-            fields.set(
+        ast::Pattern::Const(t) => ast::Pattern::Const(debruijn_term(t, ctx, env)?),
+        ast::Pattern::Unit => ast::Pattern::Unit,
+        ast::Pattern::Tup(els) => ast::Pattern::Tup(map!(debruijn_pattern(els, ctx, env))),
+        ast::Pattern::Rec(fields) => ast::Pattern::Rec(
+            fields.to(
                 fields
-                    .it()
                     .iter()
                     .map(|(i, pat)| {
                         Ok((
@@ -381,8 +387,8 @@ fn debruijn_pattern(pat: &FromPattern, ctx: &mut Ctx<Path>, env: &Ctx<Path>) -> 
                     .collect::<Result<_>>()?,
             ),
         ),
-        Pattern::Variant(id, path, var, pat) => Pattern::Variant(
-            id.set(ctx_resolve(env, id)?),
+        ast::Pattern::Variant(id, path, var, pat) => ast::Pattern::Variant(
+            id.to(ctx_resolve(env, id)?),
             path.clone(),
             var.clone(),
             map!(debruijn_pattern(pat, ctx, env)),

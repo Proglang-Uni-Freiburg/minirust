@@ -28,7 +28,7 @@ impl<T: Clone> Ctx<T> {
     pub fn from(iter: impl Iterator<Item = T>) -> Self {
         Ctx(iter.collect())
     }
-    pub fn set(&mut self, idx: usize, t: T) {
+    pub fn update(&mut self, idx: usize, t: T) {
         self.0[idx] = t; 
     }
 }

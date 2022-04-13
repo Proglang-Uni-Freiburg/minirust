@@ -1,16 +1,16 @@
 use ast::err::{Error, Result};
-use ast::tag::{Item, Tag};
+use ast::tag::Item;
 
-use ast::{Debruijn, Pattern, Top, Variant, _Ident, _Pattern, _Program, _Top, _Variant, _Vec};
+use crate::{Ident, Pattern, Program, Top, Variant, Vec};
 
 pub trait NoDups {
     fn no_dups(&self) -> Result<()>;
 }
 
-impl<T: Item> NoDups for Tag<T, Vec<_Ident<Debruijn>>> {
+impl NoDups for Vec<Ident> {
     fn no_dups(&self) -> Result<()> {
-        for a in self.it() {
-            if self.it().iter().filter(|b| &a == b).count() > 1 {
+        for a in self.as_ref() {
+            if self.iter().filter(|b| &a == b).count() > 1 {
                 return Err(Error::new("duplicated struct field").label(a, "duplicated"));
             }
         }
@@ -18,10 +18,10 @@ impl<T: Item> NoDups for Tag<T, Vec<_Ident<Debruijn>>> {
     }
 }
 
-impl<T: Item, I: Item> NoDups for Tag<T, Vec<(_Ident<Debruijn>, I)>> {
+impl<T: Item> NoDups for Vec<(Ident, T)> {
     fn no_dups(&self) -> Result<()> {
-        for (a, _) in self.it() {
-            if self.it().iter().filter(|(b, _)| a == b).count() > 1 {
+        for (a, _) in self.as_ref() {
+            if self.iter().filter(|(b, _)| a == b).count() > 1 {
                 return Err(Error::new("duplicated struct field").label(a, "is duplicated"));
             }
         }
@@ -29,27 +29,26 @@ impl<T: Item, I: Item> NoDups for Tag<T, Vec<(_Ident<Debruijn>, I)>> {
     }
 }
 
-impl NoDups for _Variant<Debruijn> {
+impl NoDups for Variant {
     fn no_dups(&self) -> Result<()> {
-        match self.it() {
-            Variant::Unit => Ok(()),
-            Variant::Tup(_) => Ok(()),
-            Variant::Rec(rec) => rec.no_dups(),
+        match self.as_ref() {
+            ast::Variant::Unit => Ok(()),
+            ast::Variant::Tup(_) => Ok(()),
+            ast::Variant::Rec(rec) => rec.no_dups(),
         }
     }
 }
 
-fn _pat_dups(p: &_Pattern<Debruijn>) -> Result<Vec<String>> {
-    Ok(match p.it() {
-        Pattern::Var(v) => {
+fn _pat_dups(p: &Pattern) -> Result<std::vec::Vec<String>> {
+    Ok(match p.as_ref() {
+        ast::Pattern::Var(v) => {
             vec![v.clone().into()]
         }
-        Pattern::Or(pats) => {
+        ast::Pattern::Or(pats) => {
             let mut dups = pats
-                .it()
                 .iter()
-                .map(|p| Ok(_pat_dups(p)?))
-                .collect::<Result<Vec<Vec<String>>>>()?
+                .map(_pat_dups)
+                .collect::<Result<std::vec::Vec<std::vec::Vec<String>>>>()?
                 .into_iter();
             let first = dups.next().unwrap();
             for other in dups {
@@ -58,19 +57,18 @@ fn _pat_dups(p: &_Pattern<Debruijn>) -> Result<Vec<String>> {
                         .label(p, "does not have same binders in each branch"));
                 }
             }
-            first.clone()
+            first
         }
-        Pattern::Unit | Pattern::Const(_) | Pattern::Wildcard => vec![],
-        Pattern::Tup(pats) => pats
-            .it()
+        ast::Pattern::Unit | ast::Pattern::Const(_) | ast::Pattern::Wildcard => vec![],
+        ast::Pattern::Tup(pats) => pats
             .iter()
-            .map(|pat| Ok(_pat_dups(pat)?))
-            .collect::<Result<Vec<Vec<String>>>>()?
+            .map(_pat_dups)
+            .collect::<Result<std::vec::Vec<std::vec::Vec<String>>>>()?
             .into_iter()
             .flatten()
             .collect(),
-        Pattern::Rec(pats) => pats
-            .it()
+        ast::Pattern::Rec(pats) => pats
+            .as_ref()
             .iter()
             .map(|(i, pat)| {
                 Ok(match pat {
@@ -78,15 +76,15 @@ fn _pat_dups(p: &_Pattern<Debruijn>) -> Result<Vec<String>> {
                     None => vec![i.clone().into()],
                 })
             })
-            .collect::<Result<Vec<Vec<String>>>>()?
+            .collect::<Result<std::vec::Vec<std::vec::Vec<String>>>>()?
             .into_iter()
             .flatten()
             .collect(),
-        Pattern::Struct(_, _, pat) | Pattern::Variant(_, _, _, pat) => _pat_dups(pat)?,
+        ast::Pattern::Struct(_, _, pat) | ast::Pattern::Variant(_, _, _, pat) => _pat_dups(pat)?,
     })
 }
 
-impl NoDups for _Pattern<Debruijn> {
+impl NoDups for Pattern {
     fn no_dups(&self) -> Result<()> {
         let vars = _pat_dups(self)?;
         for var in &vars {
@@ -99,10 +97,10 @@ impl NoDups for _Pattern<Debruijn> {
     }
 }
 
-impl NoDups for _Vec<Debruijn, _Pattern<Debruijn>> {
+impl NoDups for Vec<Pattern> {
     fn no_dups(&self) -> Result<()> {
         let mut vars = vec![];
-        for pat in self.it() {
+        for pat in self.as_ref() {
             vars.extend(_pat_dups(pat)?);
         }
         for var in &vars {
@@ -115,11 +113,10 @@ impl NoDups for _Vec<Debruijn, _Pattern<Debruijn>> {
     }
 }
 
-impl NoDups for _Program<Debruijn> {
+impl NoDups for Program {
     fn no_dups(&self) -> Result<()> {
-        for a in self.it() {
+        for a in self.as_ref() {
             if self
-                .it()
                 .iter()
                 .filter(|b| top_id(a) == top_id(b) && a.tag.0 == b.tag.0)
                 .count()
@@ -134,13 +131,13 @@ impl NoDups for _Program<Debruijn> {
     }
 }
 
-fn top_id(t: &_Top<Debruijn>) -> _Ident<Debruijn> {
-    match &t.it() {
-        Top::Fun(id, _, _, _) => id.clone(),
-        Top::FFIFun(id, _, _, _) => id.clone(),
-        Top::Alias(id, _) => id.clone(),
-        Top::Struct(id, _) => id.clone(),
-        Top::Enum(id, _) => id.clone(),
-        Top::Use(_) => unimplemented!(),
+fn top_id(t: &Top) -> &Ident {
+    match &t.as_ref() {
+        ast::Top::Fun(id, _, _, _) => id,
+        ast::Top::FFIFun(id, _, _, _) => id,
+        ast::Top::Alias(id, _) => id,
+        ast::Top::Struct(id, _) => id,
+        ast::Top::Enum(id, _) => id,
+        ast::Top::Use(_) => unimplemented!(),
     }
 }

@@ -1,5 +1,4 @@
 use crate::KEYWORDS;
-use ast;
 use ast::tag::Untag;
 use ast::{
     err::CodeRef,
@@ -8,7 +7,10 @@ use ast::{
     Named,
 };
 
-ast::def_ast_types!(type => Named, prefix => ast);
+ast::def_ast_types! {
+    type => Named,
+    prefix => ast
+}
 
 peg::parser! {
     pub grammar lang(path: &ast::Path) for str {
@@ -22,11 +24,10 @@ peg::parser! {
 
         rule str() -> String
             = cs:$(quiet!{['_' | 'a' ..= 'z' | 'A' ..= 'Z']['a' ..= 'z' | 'A' ..= 'Z' | '0' ..= '9' | '_' ]*}) {?
-                let a = cs.into();
-                if KEYWORDS.contains(&a) {
+                if KEYWORDS.contains(&cs) {
                     Err("non-keyword")
                 } else {
-                    Ok(a.into())
+                    Ok(cs.into())
                 }
             }
         rule i64() -> i64
@@ -72,10 +73,10 @@ peg::parser! {
             / "(" __ ts:lit_sep_plus(",", <typ()>) __ ")" { ast::Type::Tup(ts) }
             // / "(" _ ts:lit_sep_plus("|", <typ()>) _ ")" { ast::Type::Sum(ts) }
             / "()" { ast::Type::Unit }
-            / i:path() { match i.it()[0].it().as_str() {
-                "Bool" if i.it().len() == 1 => ast::Type::Bool,
-                "Int" if i.it().len() == 1 => ast::Type::Int,
-                "Str" if i.it().len() == 1 => ast::Type::Str,
+            / i:path() { match i.as_ref()[0].as_ref().as_str() {
+                "Bool" if i.as_ref().len() == 1 => ast::Type::Bool,
+                "Int" if i.as_ref().len() == 1 => ast::Type::Int,
+                "Str" if i.as_ref().len() == 1 => ast::Type::Str,
                 _ => ast::Type::Var(i)
             } }
 
@@ -156,10 +157,11 @@ peg::parser! {
             / "false" { ast::Term::False }
             / "true" { ast::Term::True }
             / "()" { ast::Term::Unit }
-            / "(" __ t:term() __ ")" { t.into_it() }
-            / "{" __ t:term() __ "}" { t.into_it() }
-            / s:position!() i:ident() e:position!() _ "=" _ t:term()  _ "\n" __ c:term() { ast::Term::Assign(Tag::new((path.clone(), (s, e)), vec![i]), t, c) }
-            / s:position!() i:ident() e:position!() _ s:position!() "=" e:position!() _ t:term()  { ast::Term::Assign(Tag::new((path.clone(), (s, e)), vec![i]), t,  Tag::new((path.clone(), (s, e)), ast::Term::Unit)) }
+            / "(" __ t:term() __ ")" { t.into() }
+            / "{" __ t:term() __ "}" { t.into() }
+            // disabled for now, want `mut` modifiers
+            // s:position!() i:ident() e:position!() _ "=" _ t:term()  _ "\n" __ c:term() { ast::Term::Assign(Tag::new((path.clone(), (s, e)), vec![i]), t, c) }
+            // s:position!() i:ident() e:position!() _ s:position!() "=" e:position!() _ t:term()  { ast::Term::Assign(Tag::new((path.clone(), (s, e)), vec![i]), t,  Tag::new((path.clone(), (s, e)), ast::Term::Unit)) }
             / i:path() { ast::Term::Var(i)   }
 
         #[cache_left_rec]

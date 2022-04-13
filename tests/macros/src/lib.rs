@@ -13,11 +13,11 @@ fn token_stream_to_string(_item: TokenStream) -> String {
             TokenTree::Group(_) => token_stream_to_string(this.into()),
             _ => {
                 if this.span().end().line != next.span().start().line {
-                    format!("{}\n", this.to_string())
+                    format!("{}\n", this)
                 } else if this.span().end().column == next.span().start().column - 1 {
-                    format!("{} ", this.to_string())
+                    format!("{} ", this)
                 } else {
-                    format!("{}", this.to_string())
+                   this.to_string()
                 }
             }
         })
@@ -35,20 +35,20 @@ fn token_stream_to_string(_item: TokenStream) -> String {
     s
 }
 
-fn parse(src: &String) -> _Vec<Named, _Top<Named>> {
-    parse::parse_string(src.clone(), vec!["test".into()])
+fn parse(src: &str) -> _Vec<Named, _Top<Named>> {
+    parse::parse_string(src.to_owned(), vec!["test".into()])
         .map_err(|x| {
-            println!("{}", x.build(Some(src.clone()), true));
-            x.build(Some(src.clone()), false)
+            println!("{}", x.build(Some(src.to_owned()), true));
+            x.build(Some(src.to_owned()), false)
         })
         .unwrap()
 }
 
-fn ir(program: _Vec<Named, _Top<Named>>, src: &String) -> _Vec<Debruijn, _Top<Debruijn>> {
+fn ir(program: _Vec<Named, _Top<Named>>, src: &str) -> _Vec<Debruijn, _Top<Debruijn>> {
     ir::transform(&program)
         .map_err(|x| {
-            println!("{}", x.build(Some(src.clone()), true));
-            x.build(Some(src.clone()), false)
+            println!("{}", x.build(Some(src.to_owned()), true));
+            x.build(Some(src.to_owned()), false)
         })
         .unwrap()
 }

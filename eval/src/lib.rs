@@ -1,212 +1,209 @@
 use ast::tag::MapTag;
 use ast::tag::Split;
+use ast::Debruijn;
 use ast::{
     ctx::Ctx,
     err::{Error, Result},
-    map, Value,
+    map,
 };
-use ast::{BinOp, Body, Constructor, Debruijn};
 use ffi::FFI;
 
-ast::def_from_to_ast_types! {
-    from => Debruijn,
-    to => Debruijn,
+ast::def_ast_types! {
+    type => Debruijn,
     prefix => ast
 }
 
-pub fn eval(program: &FromProgram, ffi: &Option<FFI>) -> Result<ToValue> {
-    let mut ctx: Ctx<ToValue> = Ctx::default();
-    let mut main: Option<&FromTerm> = None;
-    for top in program.it() {
-        match top.it() {
+pub fn eval(program: &Program, ffi: &Option<FFI>) -> Result<Value> {
+    let mut ctx: Ctx<Value> = Ctx::default();
+    let mut main: Option<&Term> = None;
+    for top in program {
+        match top.as_ref() {
             ast::Top::Fun(id, args, _, body) => {
-                ctx.insert(top.set(Value::TopClos(args.lefts(), body.clone())));
-                if id.it() == "main" {
+                ctx.insert(top.to(ast::Value::TopClos(args.lefts(), body.clone())));
+                if id.as_ref() == "main" {
                     main = Some(body);
                 }
             }
             ast::Top::FFIFun(id, args, ty, _) => {
-                ctx.insert(top.set(Value::FFIClos(id.clone(), args.rights(), ty.clone())));
+                ctx.insert(top.to(ast::Value::FFIClos(id.clone(), args.rights(), ty.clone())));
             }
             _ => {}
         }
     }
     // println!("CTX {}", ctx.iter().map(|x| format!("{}", x)).collect::<Vec<String>>().join(","));
     let top_ctx = ctx.clone();
-    eval_term(main.unwrap(), &mut ctx, &top_ctx, &ffi)
+    eval_term(main.unwrap(), &mut ctx, &top_ctx, ffi)
 }
 
 fn eval_term(
-    t: &FromTerm,
-    ctx: &mut Ctx<ToValue>,
-    top_ctx: &Ctx<ToValue>,
+    t: &Term,
+    ctx: &mut Ctx<Value>,
+    top_ctx: &Ctx<Value>,
     ffi: &Option<FFI>,
-) -> Result<ToValue> {
-    Ok(t.set(match t.it() {
+) -> Result<Value> {
+    Ok(t.to(match t.as_ref() {
         ast::Term::Var(i) => {
             // println!("CTX {} - {}", ctx.iter().map(|x| format!("{}", x)).collect::<Vec<String>>().join(","), i);
-            match ctx.lookup(i.it().clone()) {
-                Some(s) => s.into_it(),
+            match ctx.lookup(i) {
+                Some(s) => s.into(),
                 None => return Err(Error::new("interpreter bug").label(t, "should be resolved")),
             }
         }
-        ast::Term::Unit => Value::Unit,
-        ast::Term::True => Value::Bool(true),
-        ast::Term::False => Value::Bool(false),
-        ast::Term::Int(i) => Value::Int(i.clone()),
-        ast::Term::Str(s) => Value::Str(s.clone()),
+        ast::Term::Unit => ast::Value::Unit,
+        ast::Term::True => ast::Value::Bool(true),
+        ast::Term::False => ast::Value::Bool(false),
+        ast::Term::Int(i) => ast::Value::Int(*i),
+        ast::Term::Str(s) => ast::Value::Str(s.clone()),
         ast::Term::Seq(left, right) => {
             eval_term(left, ctx, top_ctx, ffi)?;
-            eval_term(right, ctx, top_ctx, ffi)?.into_it()
+            eval_term(right, ctx, top_ctx, ffi)?.into()
         }
-        ast::Term::Tup(els) => Value::Tup(map!(eval_term(els, ctx, top_ctx, ffi))),
-        ast::Term::Rec(fields) => Value::Rec(map!(eval_term(fields, ctx, top_ctx, ffi))),
-        ast::Term::UnOp(op, it) => match (op.it(), eval_term(it, ctx, top_ctx, ffi)?.it()) {
-            (ast::UnOp::Not, Value::Bool(true)) => Value::Bool(false),
-            (ast::UnOp::Not, Value::Bool(false)) => Value::Bool(true),
-            (ast::UnOp::Neg, Value::Int(i)) => Value::Int(-i.clone()),
+        ast::Term::Tup(els) => ast::Value::Tup(map!(eval_term(els, ctx, top_ctx, ffi))),
+        ast::Term::Rec(fields) => ast::Value::Rec(map!(eval_term(fields, ctx, top_ctx, ffi))),
+        ast::Term::UnOp(op, it) => match (op.as_ref(), &*eval_term(it, ctx, top_ctx, ffi)?) {
+            (ast::UnOp::Not, ast::Value::Bool(true)) => ast::Value::Bool(false),
+            (ast::UnOp::Not, ast::Value::Bool(false)) => ast::Value::Bool(true),
+            (ast::UnOp::Neg, ast::Value::Int(i)) => ast::Value::Int(-i),
             _ => unimplemented!(),
         },
         ast::Term::BinOp(left, op, right) => {
             match (
-                eval_term(left, ctx, top_ctx, ffi)?.it(),
-                op.it(),
-                eval_term(right, ctx, top_ctx, ffi)?.it(),
+                &*eval_term(left, ctx, top_ctx, ffi)?,
+                op.as_ref(),
+                &*eval_term(right, ctx, top_ctx, ffi)?,
             ) {
                 (
-                    Value::Int(i1),
-                    op @ (BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div),
-                    Value::Int(i2),
+                    ast::Value::Int(i1),
+                    op @ (ast::BinOp::Add | ast::BinOp::Sub | ast::BinOp::Mul | ast::BinOp::Div),
+                    ast::Value::Int(i2),
                 ) => match op {
-                    BinOp::Add => Value::Int(i1 + i2),
-                    BinOp::Sub => Value::Int(i1 - i2),
-                    BinOp::Mul => Value::Int(i1 * i2),
-                    BinOp::Div => Value::Int(i1 / i2),
+                    ast::BinOp::Add => ast::Value::Int(i1 + i2),
+                    ast::BinOp::Sub => ast::Value::Int(i1 - i2),
+                    ast::BinOp::Mul => ast::Value::Int(i1 * i2),
+                    ast::BinOp::Div => ast::Value::Int(i1 / i2),
                     _ => unreachable!(),
                 },
-                (Value::Str(s1), BinOp::Add, Value::Str(s2)) => Value::Str(s1.clone() + s2),
+                (ast::Value::Str(s1), ast::BinOp::Add, ast::Value::Str(s2)) => {
+                    ast::Value::Str(format!("{}{}", s1, s2))
+                }
                 (
-                    Value::Int(i1),
-                    op @ (BinOp::Gt | BinOp::Gte | BinOp::Lt | BinOp::Lte),
-                    Value::Int(i2),
+                    ast::Value::Int(i1),
+                    op @ (ast::BinOp::Gt | ast::BinOp::Gte | ast::BinOp::Lt | ast::BinOp::Lte),
+                    ast::Value::Int(i2),
                 ) => match op {
-                    BinOp::Gt => Value::Bool(i1 > i2),
-                    BinOp::Gte => Value::Bool(i1 >= i2),
-                    BinOp::Lt => Value::Bool(i1 < i2),
-                    BinOp::Lte => Value::Bool(i1 <= i2),
+                    ast::BinOp::Gt => ast::Value::Bool(i1 > i2),
+                    ast::BinOp::Gte => ast::Value::Bool(i1 >= i2),
+                    ast::BinOp::Lt => ast::Value::Bool(i1 < i2),
+                    ast::BinOp::Lte => ast::Value::Bool(i1 <= i2),
                     _ => unreachable!(),
                 },
-                (Value::Bool(b1), op @ (BinOp::And | BinOp::Or), Value::Bool(b2)) => match op {
-                    BinOp::Add => Value::Bool(b1.clone() && b2.clone()),
-                    BinOp::Or => Value::Bool(b1.clone() || b2.clone()),
+                (
+                    ast::Value::Bool(b1),
+                    op @ (ast::BinOp::And | ast::BinOp::Or),
+                    ast::Value::Bool(b2),
+                ) => match op {
+                    ast::BinOp::Add => ast::Value::Bool(*b1 && *b2),
+                    ast::BinOp::Or => ast::Value::Bool(*b1 || *b2),
                     _ => unreachable!(),
                 },
-                (v1, op @ (BinOp::Eq | BinOp::Neq), v2) => match op {
-                    BinOp::Eq => Value::Bool(v1.eq(v2)),
-                    BinOp::Neq => Value::Bool(!v1.eq(v2)),
+                (v1, op @ (ast::BinOp::Eq | ast::BinOp::Neq), v2) => match op {
+                    ast::BinOp::Eq => ast::Value::Bool(v1.eq(v2)),
+                    ast::BinOp::Neq => ast::Value::Bool(!v1.eq(v2)),
                     _ => unreachable!(),
                 },
                 _ => unreachable!(),
             }
         }
         ast::Term::Struct(_, id, var) => {
-            Value::Struct(id.clone(), eval_variant(var, ctx, top_ctx, ffi)?)
+            ast::Value::Struct(id.clone(), eval_variant(var, ctx, top_ctx, ffi)?)
         }
-        ast::Term::Enum(_, id, var_name, var) => Value::Enum(
+        ast::Term::Enum(_, id, var_id, var) => ast::Value::Enum(
             id.clone(),
-            var_name.clone(),
+            var_id.clone(),
             eval_variant(var, ctx, top_ctx, ffi)?,
         ),
-        ast::Term::App(lam, app) => match eval_term(lam, ctx, top_ctx, ffi)?.it() {
-            Value::Clos(pats, body, _ctx) => {
+        ast::Term::App(lam, app) => match &*eval_term(lam, ctx, top_ctx, ffi)? {
+            ast::Value::Clos(pats, body, _ctx) => {
                 let mut _ctx = _ctx.clone();
                 for (pat, val) in pats
-                    .it()
                     .iter()
-                    .zip(map!(eval_term(app, ctx, top_ctx, ffi)).into_it())
+                    .zip(map!(eval_term(app, ctx, top_ctx, ffi)).iter())
                 {
                     eval_pattern(pat, val, &mut _ctx).unwrap()
                 }
-                eval_term(body, &mut _ctx, top_ctx, ffi)?.into_it()
+                eval_term(body, &mut _ctx, top_ctx, ffi)?.into()
             }
-            Value::TopClos(pats, body) => {
+            ast::Value::TopClos(pats, body) => {
                 let mut _ctx = top_ctx.clone();
                 for (pat, val) in pats
-                    .it()
                     .iter()
-                    .zip(map!(eval_term(app, ctx, top_ctx, ffi)).into_it())
+                    .zip(map!(eval_term(app, ctx, top_ctx, ffi)).iter())
                 {
                     eval_pattern(pat, val, &mut _ctx).unwrap()
                 }
-                eval_term(body, &mut _ctx, top_ctx, ffi)?.into_it()
+                eval_term(body, &mut _ctx, top_ctx, ffi)?.into()
             }
-            Value::FFIClos(id, tys, ty) => match ffi {
+            ast::Value::FFIClos(id, tys, ty) => match ffi {
                 Some(f) => {
                     let apps = map!(eval_term(app, ctx, top_ctx, ffi));
                     f.call(
                         id,
-                        &app.set(
-                            apps.into_it()
-                                .into_iter()
-                                .zip(tys.clone().into_it().into_iter())
-                                .collect(),
-                        ),
+                        &(app.to(apps.into_iter().zip(tys.clone().into_iter()).collect())),
                         ty,
                     )?
-                    .into_it()
+                    .into()
                 }
                 None => unreachable!(),
             },
             _ => unreachable!(),
         },
         ast::Term::TupProj(t, i) => {
-            let els = match eval_term(t, ctx, top_ctx, ffi)?.it() {
-                Value::Tup(els) => els.clone(),
-                Value::Struct(_, var) | Value::Enum(_, _, var) => match var.it() {
-                    Body::Tup(els) => els.clone(),
+            let els = match &*eval_term(t, ctx, top_ctx, ffi)? {
+                ast::Value::Tup(els) => els.clone(),
+                ast::Value::Struct(_, var) | ast::Value::Enum(_, _, var) => match var.as_ref() {
+                    ast::Body::Tup(els) => els.clone(),
                     _ => unreachable!(),
                 },
                 _ => unreachable!(),
             };
-            els.it()[(i.it().clone() as usize)].it().clone()
+            els.into_iter().nth(i.into()).unwrap().into()
         }
         ast::Term::RecProj(t, s) => {
-            let fields = match eval_term(t, ctx, top_ctx, ffi)?.it() {
-                Value::Rec(fields) => fields.clone(),
-                Value::Struct(_, var) | Value::Enum(_, _, var) => match var.it() {
-                    Body::Rec(fields) => fields.clone(),
+            let fields = match &*eval_term(t, ctx, top_ctx, ffi)? {
+                ast::Value::Rec(fields) => fields.clone(),
+                ast::Value::Struct(_, var) | ast::Value::Enum(_, _, var) => match var.as_ref() {
+                    ast::Body::Rec(fields) => fields.clone(),
                     _ => unreachable!(),
                 },
                 _ => unreachable!(),
             };
             fields
-                .it()
-                .iter()
+                .into_iter()
                 .filter(|(x, _)| x == s)
                 .map(|(_, x)| x)
-                .collect::<Vec<&ToValue>>()[0]
-                .clone()
-                .into_it()
+                .next()
+                .unwrap()
+                .into()
         }
         ast::Term::Let(pat, body, cnt) => {
             let mut _ctx = ctx.clone();
-            eval_pattern(pat, eval_term(body, ctx, top_ctx, ffi)?, &mut _ctx).unwrap();
-            eval_term(cnt, &mut _ctx, top_ctx, ffi)?.into_it()
+            eval_pattern(pat, &eval_term(body, ctx, top_ctx, ffi)?, &mut _ctx).unwrap();
+            eval_term(cnt, &mut _ctx, top_ctx, ffi)?.into()
         }
         ast::Term::Assign(var, t, cnt) => {
-            let idx = var.it().clone();
+            let idx = var.into();
             let t = eval_term(t, ctx, top_ctx, ffi)?;
-            ctx.set(idx, t);
-            eval_term(cnt, ctx, top_ctx, ffi)?.into_it()
+            ctx.update(idx, t);
+            eval_term(cnt, ctx, top_ctx, ffi)?.into()
         }
-        ast::Term::Lam(args, body) => Value::Clos(args.lefts(), body.clone(), ctx.clone()),
+        ast::Term::Lam(args, body) => ast::Value::Clos(args.lefts(), body.clone(), ctx.clone()),
         ast::Term::Match(m, pats) => {
             let val = eval_term(m, ctx, top_ctx, ffi)?;
-            for (pat, term) in pats.it() {
+            for (pat, term) in pats {
                 let mut _ctx = ctx.clone();
                 // one needs to match bc exhaustive
-                match eval_pattern(pat, val.clone(), &mut _ctx) {
-                    Ok(_) => return Ok(t.set(eval_term(term, &mut _ctx, top_ctx, ffi)?.into_it())),
+                match eval_pattern(pat, &val, &mut _ctx) {
+                    Ok(_) => return Ok(t.to(eval_term(term, &mut _ctx, top_ctx, ffi)?.into())),
                     Err(_) => continue,
                 }
             }
@@ -214,55 +211,55 @@ fn eval_term(
         }
         ast::Term::Fun(_, args, _, body, cnt) => eval_term(
             cnt,
-            &mut ctx.mutate(t.set(Value::Clos(args.lefts(), body.clone(), ctx.clone()))),
+            &mut ctx.mutate(t.to(ast::Value::Clos(args.lefts(), body.clone(), ctx.clone()))),
             top_ctx,
             ffi,
         )?
-        .into_it(),
+        .into(),
     }))
 }
 
 fn eval_variant(
-    var: &FromConstructor,
-    ctx: &mut Ctx<ToValue>,
-    top_ctx: &Ctx<ToValue>,
+    var: &Constructor,
+    ctx: &mut Ctx<Value>,
+    top_ctx: &Ctx<Value>,
     ffi: &Option<FFI>,
-) -> Result<ToBody> {
-    Ok(var.set(match var.it() {
-        Constructor::Unit => Body::Unit,
-        Constructor::Tup(els) => Body::Tup(map!(eval_term(els, ctx, top_ctx, ffi))),
-        Constructor::Rec(fields) => Body::Rec(map!(eval_term(fields, ctx, top_ctx, ffi))),
+) -> Result<Body> {
+    Ok(var.to(match var.as_ref() {
+        ast::Constructor::Unit => ast::Body::Unit,
+        ast::Constructor::Tup(els) => ast::Body::Tup(map!(eval_term(els, ctx, top_ctx, ffi))),
+        ast::Constructor::Rec(fields) => ast::Body::Rec(map!(eval_term(fields, ctx, top_ctx, ffi))),
     }))
 }
 
 fn eval_pattern_tup(
-    els1: &FromVec<FromPattern>,
-    els2: &FromVec<FromValue>,
-    ctx: &mut Ctx<ToValue>,
+    els1: &Vec<Pattern>,
+    els2: &Vec<Value>,
+    ctx: &mut Ctx<Value>,
 ) -> std::result::Result<(), ()> {
     let mut _ctx = ctx.clone();
-    for (p, b) in els1.it().iter().zip(els2.it().iter()) {
-        match eval_pattern(p, b.clone(), &mut _ctx) {
+    for (p, b) in els1.iter().zip(els2.iter()) {
+        match eval_pattern(p, b, &mut _ctx) {
             Ok(_) => {}
             Err(_) => return Err(()),
         }
     }
-    for (p, b) in els1.it().iter().zip(els2.it().iter()) {
-        eval_pattern(p, b.clone(), ctx)?;
+    for (p, b) in els1.iter().zip(els2.iter()) {
+        eval_pattern(p, b, ctx)?;
     }
     Ok(())
 }
 
 fn eval_pattern_rec(
-    fields1: &FromVec<(FromIdent, Option<FromPattern>)>,
-    fields2: &FromVec<(FromIdent, FromValue)>,
-    ctx: &mut Ctx<ToValue>,
+    fields1: &Vec<(Ident, Option<Pattern>)>,
+    fields2: &Vec<(Ident, Value)>,
+    ctx: &mut Ctx<Value>,
 ) -> std::result::Result<(), ()> {
     let mut _ctx = ctx.clone();
-    for (label, field) in fields1.it().iter() {
-        match fields2.it().iter().find(|(x, _)| x == label) {
+    for (label, field) in fields1.iter() {
+        match fields2.iter().find(|(x, _)| x == label) {
             Some(v) => match field {
-                Some(pat) => match eval_pattern(pat, v.1.clone(), &mut _ctx) {
+                Some(pat) => match eval_pattern(pat, &v.1, &mut _ctx) {
                     Ok(_) => {}
                     Err(_) => return Err(()),
                 },
@@ -271,11 +268,11 @@ fn eval_pattern_rec(
             None => return Err(()),
         }
     }
-    for (label, field) in fields1.it().iter() {
-        match fields2.it().iter().find(|(x, _)| x == label) {
+    for (label, field) in fields1.iter() {
+        match fields2.iter().find(|(x, _)| x == label) {
             Some(v) => match field {
                 Some(pat) => {
-                    eval_pattern(pat, v.1.clone(), ctx)?;
+                    eval_pattern(pat, &v.1, ctx)?;
                 }
                 None => ctx.insert(v.1.clone()),
             },
@@ -286,18 +283,18 @@ fn eval_pattern_rec(
 }
 
 fn eval_pattern_variant(
-    var: &FromPattern,
-    body: FromBody,
-    ctx: &mut Ctx<ToValue>,
+    var: &Pattern,
+    body: &Body,
+    ctx: &mut Ctx<Value>,
 ) -> std::result::Result<(), ()> {
-    match var.it() {
+    match var.as_ref() {
         ast::Pattern::Unit => {}
-        ast::Pattern::Tup(els1) => match body.into_it() {
-            Body::Tup(els2) => eval_pattern_tup(els1, &els2, ctx)?,
+        ast::Pattern::Tup(els1) => match body.as_ref() {
+            ast::Body::Tup(els2) => eval_pattern_tup(els1, els2, ctx)?,
             _ => return Err(()),
         },
-        ast::Pattern::Rec(fields1) => match body.into_it() {
-            Body::Rec(fields2) => eval_pattern_rec(fields1, &fields2, ctx)?,
+        ast::Pattern::Rec(fields1) => match body.as_ref() {
+            ast::Body::Rec(fields2) => eval_pattern_rec(fields1, fields2, ctx)?,
             _ => return Err(()),
         },
         _ => unreachable!(),
@@ -305,60 +302,53 @@ fn eval_pattern_variant(
     Ok(())
 }
 
-fn eval_pattern(
-    pat: &FromPattern,
-    val: FromValue,
-    ctx: &mut Ctx<ToValue>,
-) -> std::result::Result<(), ()> {
-    match pat.it() {
-        ast::Pattern::Var(_) => ctx.insert(val),
+fn eval_pattern(pat: &Pattern, val: &Value, ctx: &mut Ctx<Value>) -> std::result::Result<(), ()> {
+    match pat.as_ref() {
+        ast::Pattern::Var(_) => ctx.insert(val.clone()),
         ast::Pattern::Wildcard => return Ok(()),
-        ast::Pattern::Const(c) => match c.it() {
-            ast::Term::Unit if matches!(val.it(), Value::Unit) => {}
-            ast::Term::True if matches!(val.it(), Value::Bool(true)) => {}
-            ast::Term::False if matches!(val.it(), Value::Bool(false)) => {}
-            ast::Term::Int(i1) => match val.it() {
-                Value::Int(i2) if i1 == i2 => {}
+        ast::Pattern::Const(c) => match c.as_ref() {
+            ast::Term::Unit if matches!(val.as_ref(), ast::Value::Unit) => {}
+            ast::Term::True if matches!(val.as_ref(), ast::Value::Bool(true)) => {}
+            ast::Term::False if matches!(val.as_ref(), ast::Value::Bool(false)) => {}
+            ast::Term::Int(i1) => match val.as_ref() {
+                ast::Value::Int(i2) if i1 == i2 => {}
                 _ => return Err(()),
             },
-            ast::Term::Str(s1) => match val.it() {
-                Value::Str(s2) if s1 == s2 => {}
+            ast::Term::Str(s1) => match val.as_ref() {
+                ast::Value::Str(s2) if s1 == s2 => {}
                 _ => return Err(()),
             },
             _ => return Err(()),
         },
-        ast::Pattern::Struct(_, p1, var) => match val.into_it() {
-            Value::Struct(p2, body) if p1 == &p2 => eval_pattern_variant(var, body, ctx)?,
+        ast::Pattern::Struct(_, p1, var) => match val.as_ref() {
+            ast::Value::Struct(p2, body) if p1 == p2 => eval_pattern_variant(var, body, ctx)?,
             _ => return Err(()),
         },
-        ast::Pattern::Variant(_, p1, vn1, var) => match val.into_it() {
-            Value::Enum(p2, vn2, body) if p1 == &p2 && vn1 == &vn2 => {
+        ast::Pattern::Variant(_, p1, vn1, var) => match val.as_ref() {
+            ast::Value::Enum(p2, vn2, body) if p1 == p2 && vn1 == vn2 => {
                 eval_pattern_variant(var, body, ctx)?
             }
             _ => return Err(()),
         },
         ast::Pattern::Or(pats) => {
             let mut _ctx = ctx.clone();
-            for pat in pats.it() {
-                match eval_pattern(pat, val.clone(), &mut _ctx) {
-                    Ok(_) => {
-                        eval_pattern(pat, val.clone(), ctx)?;
-                        return Ok(());
-                    }
-                    Err(_) => {}
+            for pat in pats.as_ref() {
+                if eval_pattern(pat, val, &mut _ctx).is_ok() {
+                    eval_pattern(pat, val, ctx)?;
+                    return Ok(());
                 }
             }
             return Err(());
         }
-        ast::Pattern::Tup(els1) => match val.into_it() {
-            Value::Tup(els2) if els1.it().len() == els2.it().len() => {
-                eval_pattern_tup(els1, &els2, ctx)?
+        ast::Pattern::Tup(els1) => match val.as_ref() {
+            ast::Value::Tup(els2) if els1.iter().count() == els2.iter().count() => {
+                eval_pattern_tup(els1, els2, ctx)?
             }
             _ => return Err(()),
         },
-        ast::Pattern::Rec(fields1) => match val.into_it() {
-            Value::Rec(fields2) if fields1.it().len() == fields2.it().len() => {
-                eval_pattern_rec(fields1, &fields2, ctx)?
+        ast::Pattern::Rec(fields1) => match val.as_ref() {
+            ast::Value::Rec(fields2) if fields1.iter().count() == fields2.iter().count() => {
+                eval_pattern_rec(fields1, fields2, ctx)?
             }
             _ => return Err(()),
         },
@@ -371,43 +361,37 @@ trait ValueEq {
     fn eq(&self, rhs: &Self) -> bool;
 }
 
-impl ValueEq for Body<Debruijn> {
+impl ValueEq for ast::Body<Debruijn> {
     fn eq(&self, rhs: &Self) -> bool {
         match (self, rhs) {
-            (Body::Unit, Body::Unit) => true,
-            (Body::Tup(els1), Body::Tup(els2)) => els1
-                .it()
+            (ast::Body::Unit, ast::Body::Unit) => true,
+            (ast::Body::Tup(els1), ast::Body::Tup(els2)) => {
+                els1.iter().zip(els2.iter()).all(|(x1, x2)| x1.eq(x2))
+            }
+            (ast::Body::Rec(fields1), ast::Body::Rec(fields2)) => fields1
                 .iter()
-                .zip(els2.it().iter())
-                .all(|(x1, x2)| x1.eq(x2)),
-            (Body::Rec(fields1), Body::Rec(fields2)) => fields1
-                .it()
-                .iter()
-                .zip(fields2.it().iter())
+                .zip(fields2.iter())
                 .all(|((n1, x1), (n2, x2))| n1 == n2 && x1.eq(x2)),
             _ => false,
         }
     }
 }
 
-impl ValueEq for Value<Debruijn> {
+impl ValueEq for ast::Value<Debruijn> {
     fn eq(&self, rhs: &Self) -> bool {
         return match (self, rhs) {
-            (Value::Unit, Value::Unit) => true,
-            (Value::Bool(b1), Value::Bool(b2)) => b1.clone() == b2.clone(),
-            (Value::Int(i1), Value::Int(i2)) => i1 == i2,
-            (Value::Tup(els1), Value::Tup(els2)) => els1
-                .it()
+            (ast::Value::Unit, ast::Value::Unit) => true,
+            (ast::Value::Bool(b1), ast::Value::Bool(b2)) => b1 == b2,
+            (ast::Value::Int(i1), ast::Value::Int(i2)) => i1 == i2,
+            (ast::Value::Tup(els1), ast::Value::Tup(els2)) => {
+                els1.iter().zip(els2.iter()).all(|(x1, x2)| x1.eq(x2))
+            }
+            (ast::Value::Rec(fields1), ast::Value::Rec(fields2)) => fields1
                 .iter()
-                .zip(els2.it().iter())
-                .all(|(x1, x2)| x1.eq(x2)),
-            (Value::Rec(fields1), Value::Rec(fields2)) => fields1
-                .it()
-                .iter()
-                .zip(fields2.it().iter())
+                .zip(fields2.iter())
                 .all(|((n1, x1), (n2, x2))| n1 == n2 && x1.eq(x2)),
-            (Value::Struct(n1, v1), Value::Struct(n2, v2)) => n1 == n2 && v1.eq(v2),
-            (Value::Enum(n1, vn1, v1), Value::Enum(n2, vn2, v2)) => {
+            (ast::Value::Struct(n1, v1), ast::Value::Struct(n2, v2)) => n1 == n2 && v1.eq(v2),
+            (ast::Value::Enum(n1, vn1, v1), ast::Value::Enum(n2, vn2, v2)) => {
                 n1 == n2 && vn1 == vn2 && v1.eq(v2)
             }
             _ => false,

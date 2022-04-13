@@ -1,19 +1,19 @@
 use std::fmt::Display;
-use std::fmt::Debug;
+
 use crate::Body;
+use crate::ReprItem;
 use crate::Type;
 use crate::Value;
-use crate::{Repr, Variant};
+use crate::Variant;
 
-impl<R: Repr + Clone + Debug> Display for Variant<R> {
+impl<R: ReprItem> Display for Variant<R> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Variant::Unit => Ok(()),
             Variant::Tup(els) => write!(
                 f,
                 "({})",
-                els.it()
-                    .iter()
+                els.iter()
                     .map(|el| format!("{}", el))
                     .collect::<Vec<String>>()
                     .join(",")
@@ -22,7 +22,6 @@ impl<R: Repr + Clone + Debug> Display for Variant<R> {
                 f,
                 "{{{}}}",
                 fields
-                    .it()
                     .iter()
                     .map(|(id, el)| format!("{}: {}", id, el))
                     .collect::<Vec<String>>()
@@ -32,7 +31,7 @@ impl<R: Repr + Clone + Debug> Display for Variant<R> {
     }
 }
 
-impl<R: Repr + Clone + Debug> Display for Type<R> {
+impl<R: ReprItem> Display for Type<R> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Type::Var(_) => write!(f, "[bug] unresolved type variable",),
@@ -43,8 +42,7 @@ impl<R: Repr + Clone + Debug> Display for Type<R> {
             Type::Tup(els) => write!(
                 f,
                 "({})",
-                els.it()
-                    .iter()
+                els.iter()
                     .map(|el| format!("{}", el))
                     .collect::<Vec<String>>()
                     .join(",")
@@ -53,7 +51,6 @@ impl<R: Repr + Clone + Debug> Display for Type<R> {
                 f,
                 "{{{}}}",
                 fields
-                    .it()
                     .iter()
                     .map(|(id, el)| format!("{}: {}", id, el))
                     .collect::<Vec<String>>()
@@ -62,8 +59,7 @@ impl<R: Repr + Clone + Debug> Display for Type<R> {
             Type::Fun(args, ret) => write!(
                 f,
                 "({}) -> {}",
-                args.it()
-                    .iter()
+                args.iter()
                     .map(|ty| format!("{}", ty))
                     .collect::<Vec<String>>()
                     .join(","),
@@ -72,18 +68,16 @@ impl<R: Repr + Clone + Debug> Display for Type<R> {
             Type::Struct(id, _) => write!(
                 f,
                 "{}",
-                id.it()
-                    .iter()
-                    .map(|x| format!("{}", x))
+                id.iter()
+                    .map(|x| x.to_string())
                     .collect::<Vec<String>>()
                     .join("::")
             ),
             Type::Enum(id, _) => write!(
                 f,
                 "{}",
-                id.it()
-                    .iter()
-                    .map(|x| format!("{}", x))
+                id.iter()
+                    .map(|x| x.to_string())
                     .collect::<Vec<String>>()
                     .join("::")
             ),
@@ -91,15 +85,14 @@ impl<R: Repr + Clone + Debug> Display for Type<R> {
     }
 }
 
-impl<R: Repr + Clone + Debug> Display for Body<R> {
+impl<R: ReprItem> Display for Body<R> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Body::Unit => Ok(()),
             Body::Tup(els) => write!(
                 f,
                 "({})",
-                els.it()
-                    .iter()
+                els.iter()
                     .map(|el| format!("{}", el))
                     .collect::<Vec<String>>()
                     .join(",")
@@ -108,7 +101,6 @@ impl<R: Repr + Clone + Debug> Display for Body<R> {
                 f,
                 "{{{}}}",
                 fields
-                    .it()
                     .iter()
                     .map(|(id, el)| format!("{}: {}", id, el))
                     .collect::<Vec<String>>()
@@ -118,7 +110,7 @@ impl<R: Repr + Clone + Debug> Display for Body<R> {
     }
 }
 
-impl<R: Repr + Clone + Debug> Display for Value<R> {
+impl<R: ReprItem> Display for Value<R> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Value::Unit => write!(f, "()"),
@@ -128,8 +120,7 @@ impl<R: Repr + Clone + Debug> Display for Value<R> {
             Value::Tup(els) => write!(
                 f,
                 "({})",
-                els.it()
-                    .iter()
+                els.iter()
                     .map(|el| format!("{}", el))
                     .collect::<Vec<String>>()
                     .join(",")
@@ -138,7 +129,6 @@ impl<R: Repr + Clone + Debug> Display for Value<R> {
                 f,
                 "{{{}}}",
                 fields
-                    .it()
                     .iter()
                     .map(|(id, el)| format!("{}: {}", id, el))
                     .collect::<Vec<String>>()
@@ -148,7 +138,7 @@ impl<R: Repr + Clone + Debug> Display for Value<R> {
                 f,
                 "{}",
                 id.iter()
-                    .map(|x| format!("{}", x))
+                    .map(|x| x.to_string())
                     .collect::<Vec<String>>()
                     .join("::")
             ),
@@ -156,13 +146,13 @@ impl<R: Repr + Clone + Debug> Display for Value<R> {
                 f,
                 "{}",
                 id.iter()
-                    .map(|x| format!("{}", x))
+                    .map(|x| x.to_string())
                     .collect::<Vec<String>>()
                     .join("::")
             ),
-            Value::Clos(_, _, _) => write!(f, "callable"),
-            Value::TopClos(_, _) => write!(f, "toplevel callable"),
-            Value::FFIClos(_, _, _) => write!(f, "ffi callable"),
+            Value::Clos(_, _, _) => write!(f, "closure"),
+            Value::TopClos(_, _) => write!(f, "toplevel closure"),
+            Value::FFIClos(_, _, _) => write!(f, "ffi closure"),
         }
     }
 }
