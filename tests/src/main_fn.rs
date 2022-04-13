@@ -1,20 +1,22 @@
 #[cfg(test)]
 mod tests {
-    use test_macros::{succeeds, typing_fails};
+    use macros::{succeeds, typing_fails};
 
     #[test]
     fn main_exists() {
         succeeds! {
-            fn main() {
-               ()
-            }
+             use tests::util::assert;
+
+             fn main() {
+                 assert::assert(true, "never happens")
+             }
         }
     }
 
     #[test]
     fn main_not_exists() {
         typing_fails! {
-            struct main !N
+            struct main
 
             fn not_main() {
                ()
