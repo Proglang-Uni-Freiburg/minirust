@@ -22,16 +22,15 @@ impl TypeEq<Type> for Type {
             (ast::Type::Rec(left_fields), ast::Type::Rec(right_fields)) => {
                 left_fields.eq(right_fields, env)
             }
-            (ast::Type::Fun(left_args, left_ret), ast::Type::Fun(right_args, right_ret)) => {
-                left_args.eq(right_args, env)?;
-                left_ret.eq(right_ret, env)
+            (ast::Type::Fun(_, _), ast::Type::Fun(_, _)) => {
+                unimplemented!("cannot compare functions by type")
             }
             (
-                ast::Type::Struct(left_id, left_fields),
-                ast::Type::Struct(right_id, right_fields),
+                ast::Type::Struct(left_id, _),
+                ast::Type::Struct(right_id, _),
             ) => {
-                path_eq(left_id, right_id)?;
-                left_fields.eq(right_fields, env)
+                path_eq(left_id, right_id)
+                // left_fields.eq(right_fields, env)
             }
             (ast::Type::Enum(left_id, _), ast::Type::Enum(right_id, _)) => {
                 path_eq(left_id, right_id)
@@ -47,8 +46,8 @@ impl TypeEq<Type> for Type {
 pub fn path_eq(left: &Tag<CodeRef, Path>, right: &Tag<CodeRef, Path>) -> Result<()> {
     if left.as_ref() != right.as_ref() {
         return Err(Error::new("path mismatch")
-            .label(left, "this")
-            .label(right, "that"));
+            .label(left, format!("got {}", left.join("::")))
+            .label(right, format!("and {}", right.join("::"))));
     }
     Ok(())
 }
