@@ -17,7 +17,7 @@ fn token_stream_to_string(_item: TokenStream) -> String {
                 } else if this.span().end().column == next.span().start().column - 1 {
                     format!("{} ", this)
                 } else {
-                   this.to_string()
+                    this.to_string()
                 }
             }
         })

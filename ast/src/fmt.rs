@@ -34,7 +34,7 @@ impl<R: ReprItem> Display for Variant<R> {
 impl<R: ReprItem> Display for Type<R> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Type::Var(_) => write!(f, "[bug] unresolved type variable",),
+            Type::Name(_) => write!(f, "[bug] unresolved type variable",),
             Type::Unit => write!(f, "()"),
             Type::Bool => write!(f, "Bool"),
             Type::Int => write!(f, "Int"),

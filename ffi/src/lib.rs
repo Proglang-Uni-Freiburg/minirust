@@ -13,8 +13,7 @@ ast::def_ast_types! {
 }
 
 pub struct FFI {
-    module_path: String,
-    code_path: String,
+    id: String,
     lib: Library,
 }
 
@@ -22,12 +21,23 @@ type DynResult<R> = std::result::Result<R, Box<dyn std::error::Error>>;
 
 impl FFI {
     pub fn new(program: &Program, env: &Ctx<Type>) -> Result<Self> {
-        let tmp = std::env::temp_dir().to_str().unwrap().to_string();
         let id: String = rand::thread_rng()
             .sample_iter(&Alphanumeric)
             .take(24)
             .map(char::from)
             .collect();
+        let module = Self::build(program, env, &id)?;
+        Ok(FFI {
+            id,
+            lib: unsafe {
+                Library::new(module)
+                    .map_err(|e| Error::new(format!("failed to load module {}", e)))?
+            },
+        })
+    }
+
+    fn build(program: &Program, env: &Ctx<Type>, id: &String) -> Result<String> {
+        let tmp = std::env::temp_dir().to_str().unwrap().to_string();
         let module_path = format!("{}/{}.module", tmp, id);
         let code_path = format!("{}/{}.rs", tmp, id);
 
@@ -37,8 +47,8 @@ impl FFI {
         if !Command::new("rustc")
             .arg("--crate-type")
             .arg("dylib")
-            .arg("-A")
-            .arg("warnings")
+            // .arg("-A")
+            // .arg("warnings")
             .arg("-o")
             .arg(&module_path)
             .arg(&code_path)
@@ -53,48 +63,38 @@ impl FFI {
                 program.tag.0.join("/")
             )));
         }
-
-        Ok(FFI {
-            module_path,
-            code_path,
-            lib: unsafe {
-                Library::new(&format!("{}/{}.module", tmp, id))
-                    .map_err(|e| Error::new(format!("failed to load module {}", e)))?
-            },
-        })
+        Ok(module_path)
     }
 
     fn _call(&self, function: &Ident, args: &Vec<(Value, Type)>, ty: &Type) -> DynResult<Value> {
-        Ok(
-            function.to(match (args.as_ref().len(), ty.as_ref()) {
-                (0, ast::Type::Unit) => {
-                    self.call0::<()>(function.as_ref())?;
-                    ast::Value::Unit
-                }
-                (0, ast::Type::Bool) => ast::Value::Bool(self.call0(function.as_ref())?),
-                (0, ast::Type::Int) => ast::Value::Int(self.call0(function.as_ref())?),
-                (0, ast::Type::Str) => ast::Value::Str(self.call0(function.as_ref())?),
-                (1, ast::Type::Unit) => {
-                    call1!(self, args, function);
-                    ast::Value::Unit
-                }
-                (1, ast::Type::Bool) => ast::Value::Bool(call1!(self, args, function)),
-                (1, ast::Type::Int) => ast::Value::Int(call1!(self, args, function)),
-                (1, ast::Type::Str) => ast::Value::Str(call1!(self, args, function)),
-                (2, ast::Type::Unit) => {
-                    call2!(self, args, function);
-                    ast::Value::Unit
-                }
-                (2, ast::Type::Bool) => ast::Value::Bool(call2!(self, args, function)),
-                (2, ast::Type::Int) => ast::Value::Int(call2!(self, args, function)),
-                (2, ast::Type::Str) => ast::Value::Str(call2!(self, args, function)),
-                _ => unimplemented!(),
-            }),
-        )
+        Ok(function.to(match (args.as_ref().len(), ty.as_ref()) {
+            (0, ast::Type::Unit) => {
+                self.call0::<()>(function.as_ref())?;
+                ast::Value::Unit
+            }
+            (0, ast::Type::Bool) => ast::Value::Bool(self.call0(function.as_ref())?),
+            (0, ast::Type::Int) => ast::Value::Int(self.call0(function.as_ref())?),
+            (0, ast::Type::Str) => ast::Value::Str(self.call0(function.as_ref())?),
+            (1, ast::Type::Unit) => {
+                call1!(self, args, function);
+                ast::Value::Unit
+            }
+            (1, ast::Type::Bool) => ast::Value::Bool(call1!(self, args, function)),
+            (1, ast::Type::Int) => ast::Value::Int(call1!(self, args, function)),
+            (1, ast::Type::Str) => ast::Value::Str(call1!(self, args, function)),
+            (2, ast::Type::Unit) => {
+                call2!(self, args, function);
+                ast::Value::Unit
+            }
+            (2, ast::Type::Bool) => ast::Value::Bool(call2!(self, args, function)),
+            (2, ast::Type::Int) => ast::Value::Int(call2!(self, args, function)),
+            (2, ast::Type::Str) => ast::Value::Str(call2!(self, args, function)),
+            _ => unimplemented!(),
+        }))
     }
 
-    pub fn call(&self, function: &Ident, args: &Vec<(Value, Type)>, ty: &Type) -> Result<Value> {
-        self._call(function, args, ty)
+    pub fn call(&self, function: &Ident, args: &Vec<(Value, Type)>, ret: &Type) -> Result<Value> {
+        self._call(function, args, ret)
             .map_err(|e| Error::new("ffi error").label(function, format!("{}", e)))
     }
 
@@ -123,11 +123,14 @@ impl FFI {
 
 impl Drop for FFI {
     fn drop(&mut self) {
-        let src = std::path::Path::new(&self.code_path);
-        if src.exists() {
-            fs::remove_file(src).unwrap()
+        let tmp = std::env::temp_dir().to_str().unwrap().to_string();
+        let code_path = format!("{}/{}.rs", &tmp, self.id);
+        let module_path = format!("{}/{}.module", &tmp, self.id);
+        let code = std::path::Path::new(&code_path);
+        if code.exists() {
+            fs::remove_file(code).unwrap()
         }
-        let lib = std::path::Path::new(&self.module_path);
+        let lib = std::path::Path::new(&module_path);
         if lib.exists() {
             fs::remove_file(lib).unwrap()
         }

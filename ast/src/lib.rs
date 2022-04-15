@@ -49,7 +49,7 @@ pub type _Type<R> = Tag<<R as Repr>::Ann, Type<R>>;
 
 #[derive(Clone, Debug)]
 pub enum Type<R: ReprItem> {
-    Var(_Var<R>),
+    Name(_Var<R>),
 
     Unit,
     Bool,

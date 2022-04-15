@@ -66,7 +66,6 @@ peg::parser! {
             = i:tag(<i64()>) { i }
 
         // types
-
         rule _typ() -> ast::Type<Named>
             = "(" __  ts:lit_sep_plus(",", <typ()>) __ ")" _ "->" _ c:typ() { ast::Type::Fun(ts, c) }
             / "{" __ ts:lit_sep_plus(",", <lit_tup(":", <ident()>, <typ()>)>) __ "}" { ast::Type::Rec(ts) }
@@ -77,7 +76,7 @@ peg::parser! {
                 "Bool" if i.as_ref().len() == 1 => ast::Type::Bool,
                 "Int" if i.as_ref().len() == 1 => ast::Type::Int,
                 "Str" if i.as_ref().len() == 1 => ast::Type::Str,
-                _ => ast::Type::Var(i)
+                _ => ast::Type::Name(i)
             } }
 
         rule typ() -> Type = precedence!{
@@ -91,7 +90,6 @@ peg::parser! {
 
 
         // terms
-
          rule _constructor() -> ast::Constructor<Named>
             // = i:ident() _ "(" _ ts:lit_sep_plus(",", <term()>) _ ")" { ast::Constructor::Tup(i, ts) }
             = "{" __ ts:lit_sep_plus(",", <lit_tup(":", <ident()>, <term()>)>) __ "}" { ast::Constructor::Rec(ts) }

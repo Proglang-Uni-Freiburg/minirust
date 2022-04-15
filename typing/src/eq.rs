@@ -12,8 +12,8 @@ pub trait TypeEq<T> {
 impl TypeEq<Type> for Type {
     fn eq(&self, rhs: &Type, env: &Env) -> Result<()> {
         match (self.as_ref(), rhs.as_ref()) {
-            (ast::Type::Var(id), _) => env.lookup(id).unwrap().eq(rhs, env),
-            (_, ast::Type::Var(id)) => self.eq(&env.lookup(id).unwrap(), env),
+            (ast::Type::Name(id), _) => env.lookup(id).unwrap().eq(rhs, env),
+            (_, ast::Type::Name(id)) => self.eq(&env.lookup(id).unwrap(), env),
             (ast::Type::Unit, ast::Type::Unit) => Ok(()),
             (ast::Type::Bool, ast::Type::Bool) => Ok(()),
             (ast::Type::Int, ast::Type::Int) => Ok(()),

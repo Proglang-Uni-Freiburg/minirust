@@ -1,11 +1,9 @@
 #[macro_export]
 macro_rules! path {
-    ($x:expr) => (
-        {
-            let prefix = $x.code_ref().0.last().unwrap().clone();
-            vec![prefix, $x.to_string().clone()]
-        }
-    );
+    ($x:expr) => {{
+        let prefix = $x.code_ref().0.last().unwrap().clone();
+        vec![prefix, $x.to_string().clone()]
+    }};
 }
 
 #[macro_export]

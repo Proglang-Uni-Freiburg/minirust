@@ -2,6 +2,78 @@ use ast::ctx::Ctx;
 use ast::err::{Error, Result};
 
 use crate::{Program, Type, Variant};
+// enum Body {
+//     Unit,
+//     Tup(Vec<Value>),
+//     Rec(Vec<(String, Value)>)
+// }
+
+// enum Value {
+//     Unit,
+//     Bool(bool),
+//     Int(i64),
+//     Str(String),
+//     Tup(Vec<Value>),
+//     Rec(Vec<(String, Value)>),
+//     Struct(String, Body),
+//     Enum(String, String, Body)
+// }
+
+// trait ToValue {
+//     fn to_value(&self) -> Value;
+// }
+
+const BOILERPLATE: &str = "#![allow(dead_code)]
+#![allow(unused_imports)]
+#![allow(unreachable_code)]
+
+// enum Body {
+//     Unit,
+//     Tup(Vec<Value>),
+//     Rec(Vec<(String, Value)>)
+// }
+
+// enum Value {
+//     Unit,
+//     Bool(bool),
+//     Int(i64),
+//     Str(String),
+//     Tup(Vec<Value>),
+//     Rec(Vec<(String, Value)>),
+//     Struct(String, Body),
+//     Enum(String, String, Body)
+// }
+
+// trait ToValue {
+//     fn to_value(&self) -> Value;
+// }
+
+// impl ToValue for () {
+//     fn to_value(&self) -> Value {
+//         Value::Unit
+//     }
+// }
+// impl ToValue for bool {
+//     fn to_value(&self) -> Value {
+//         Value::Bool(*self)
+//     }
+// }
+// impl ToValue for i64 {
+//     fn to_value(&self) -> Value {
+//         Value::Int(*self)
+//     }
+// }
+// impl ToValue for String {
+//     fn to_value(&self) -> Value {
+//         Value::Str(self.clone())
+//     }
+// }
+// impl<'a> ToValue for &'a str {
+//     fn to_value(&self) -> Value {
+//         Value::Str(self.to_string())
+//     }
+// }
+";
 
 pub trait ToRustCode {
     fn to_rust(&self, env: &Ctx<Type>) -> Result<String>;
@@ -9,7 +81,7 @@ pub trait ToRustCode {
 
 impl ToRustCode for Program {
     fn to_rust(&self, env: &Ctx<Type>) -> Result<String> {
-        let mut out = "#![allow(dead_code)]\n".to_string();
+        let mut out = BOILERPLATE.to_string();
         for top in self {
             match top.as_ref() {
                 ast::Top::FFIFun(b, args, ret, code) => out.push_str(
@@ -26,23 +98,23 @@ impl ToRustCode for Program {
                     .as_str(),
                 ),
                 // not useful atm
-                /* ast::Top::Alias(alias, ty) => {
-                    out.push_str(format!("type {} = {};\n", alias.as_ref(), ty.to_rust(env)?).as_str())
-                }
-                ast::Top::Struct(s, var) => {
-                    out.push_str(format!("struct {} {}\n", s.as_ref(), var.to_rust(env)?).as_str())
-                }
-                ast::Top::Enum(s, vars) => out.push_str(
-                    format!(
-                        "enum {} {{\n{}\n}}\n",
-                        s.as_ref(),
-                        vars.iter()
-                            .map(|(i, x)| Ok(format!("    {}{}", i.as_ref(), x.to_rust(env)?)))
-                            .collect::<Result<Vec<String>>>()?
-                            .join(",\n")
-                    )
-                    .as_str(),
-                ), */
+                // ast::Top::Alias(alias, ty) => {
+                //     out.push_str(format!("type {} = {};\n", alias.as_ref(), ty.to_rust(env)?).as_str())
+                // }
+                // ast::Top::Struct(s, var) => {
+                //     out.push_str(format!("struct {} {}\n", s.as_ref(), var.to_rust(env)?).as_str())
+                // }
+                // ast::Top::Enum(s, vars) => out.push_str(
+                //     format!(
+                //         "enum {} {{\n{}\n}}\n",
+                //         s.as_ref(),
+                //         vars.iter()
+                //             .map(|(i, x)| Ok(format!("    {}{}", i.as_ref(), x.to_rust(env)?)))
+                //             .collect::<Result<Vec<String>>>()?
+                //             .join(",\n")
+                //     )
+                //     .as_str(),
+                // ), 
                 _ => {}
             }
         }
@@ -76,7 +148,7 @@ impl ToRustCode for Variant {
 impl ToRustCode for Type {
     fn to_rust(&self, env: &Ctx<Type>) -> Result<String> {
         Ok(match self.as_ref() {
-            ast::Type::Var(i) => env.lookup(i).unwrap().to_rust(env)?,
+            ast::Type::Name(i) => env.lookup(i).unwrap().to_rust(env)?,
             ast::Type::Unit => "()".into(),
             ast::Type::Bool => "bool".into(),
             ast::Type::Int => "i64".into(),

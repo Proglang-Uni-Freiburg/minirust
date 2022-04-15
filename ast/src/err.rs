@@ -5,17 +5,15 @@ use crate::{
 use annotate_snippets::display_list::{DisplayList, FormatOptions};
 use annotate_snippets::snippet::{Annotation, AnnotationType, Slice, Snippet, SourceAnnotation};
 
+pub type Result<T> = std::result::Result<T, Error>;
+
+pub type CodeRef = (Path, (usize, usize));
+
 #[derive(Clone, Debug)]
 pub struct Error {
     label: String,
     items: Vec<(CodeRef, String)>,
     footer: Vec<String>,
-}
-
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.display())
-    }
 }
 
 impl Error {
@@ -58,7 +56,7 @@ impl Error {
                     None => {
                         let src = std::fs::read_to_string(std::path::Path::new(&path)).unwrap();
                         parse_err(src, (*start, *end))
-                    },
+                    }
                 }
             };
             snip.slices.push(Slice {
@@ -83,15 +81,17 @@ impl Error {
         let dl = DisplayList::from(snip);
         format!("{}", dl)
     }
- 
+
     pub fn display(&self) -> String {
         self.build(None, true)
     }
 }
 
-pub type Result<T> = std::result::Result<T, Error>;
-
-pub type CodeRef = (Path, (usize, usize));
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.display())
+    }
+}
 
 pub trait GetCodeRef {
     fn code_ref(&self) -> &CodeRef;

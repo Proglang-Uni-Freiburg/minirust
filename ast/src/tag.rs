@@ -22,9 +22,6 @@ impl<T: Item, I: Item> Tag<T, I> {
     pub fn into(self) -> I {
         *self.it
     }
-    pub fn as_ref(&self) -> &I {
-        &*self.it
-    }
     pub fn to<J: Item>(&self, j: J) -> Tag<T, J> {
         Tag::new(self.tag.clone(), j)
     }
@@ -53,6 +50,12 @@ impl<T: Item, I: Item> Debug for Tag<T, I> {
 impl<T: Item, I: Item + Display> Display for Tag<T, I> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.as_ref())
+    }
+}
+
+impl<T: Item, I: Item> AsRef<I> for Tag<T, I> {
+    fn as_ref(&self) -> &I {
+        &*self.it
     }
 }
 

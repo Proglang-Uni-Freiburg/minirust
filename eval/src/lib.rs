@@ -143,13 +143,13 @@ fn eval_term(
                 }
                 eval_term(body, &mut _ctx, top_ctx, ffi)?.into()
             }
-            ast::Value::FFIClos(id, tys, ty) => match ffi {
+            ast::Value::FFIClos(id, tys, ret) => match ffi {
                 Some(f) => {
                     let apps = map!(eval_term(app, ctx, top_ctx, ffi));
                     f.call(
                         id,
                         &(app.to(apps.into_iter().zip(tys.clone().into_iter()).collect())),
-                        ty,
+                        ret,
                     )?
                     .into()
                 }

@@ -19,17 +19,21 @@ impl<T: Clone> Ctx<T> {
         }
         Ctx(clone)
     }
+
     pub fn lookup<I: Into<usize>>(&self, u: I) -> Option<T> {
         Some(self.0.get(u.into())?.clone())
     }
+
+    pub fn update(&mut self, idx: usize, t: T) {
+        self.0[idx] = t;
+    }
+
     pub fn iter(&self) -> impl Iterator<Item = &T> {
         self.0.iter()
     }
+
     pub fn from(iter: impl Iterator<Item = T>) -> Self {
         Ctx(iter.collect())
-    }
-    pub fn update(&mut self, idx: usize, t: T) {
-        self.0[idx] = t; 
     }
 }
 

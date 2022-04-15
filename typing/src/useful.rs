@@ -1,4 +1,4 @@
-use ast::err::{CodeRef, Error, Result};
+use ast::err::{Error, GetCodeRef, Result};
 use ast::tag::{Item, Tag};
 use std::cell::Cell;
 use std::iter::once;
@@ -337,11 +337,7 @@ pub fn specialize(
 }
 
 type Matrix<T> = Vec<Vec<T>>;
-fn is_useful(
-    matrix: &Matrix<DeconstructedPattern>,
-    v: &[DeconstructedPattern],
-    env: &Env,
-) -> bool {
+fn is_useful(matrix: &Matrix<DeconstructedPattern>, v: &[DeconstructedPattern], env: &Env) -> bool {
     let row_lens = matrix.iter().map(|row| row.len()).collect::<Vec<usize>>();
     assert!(row_lens.iter().min() == row_lens.iter().max());
 
@@ -440,10 +436,10 @@ fn is_useful(
     reachable
 }
 
-pub fn is_exhaustive<T: Item>(
+pub fn is_exhaustive<T: GetCodeRef>(
     pats: &crate::Vec<Pattern>,
     ty: &Type,
-    m: &Tag<CodeRef, T>,
+    m: &T,
     env: &Env,
 ) -> Result<()> {
     let mut matrix = vec![];

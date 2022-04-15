@@ -1,7 +1,7 @@
 mod dups;
 mod eq;
 mod proj;
-mod usefulness;
+mod useful;
 
 use ast::err::{Error, Result};
 use ast::map;
@@ -92,7 +92,7 @@ fn type_check_top(top: &Top, ctx: &Ctx, env: &Ctx) -> Result<()> {
                 types_of_pattern(pat, ty, &mut _ctx, env)?;
             }
             for (pat, ty) in args {
-                usefulness::is_exhaustive(&pat.to(vec![pat.clone()]), ty, pat, env)?;
+                useful::is_exhaustive(&pat.to(vec![pat.clone()]), ty, pat, env)?;
             }
             type_of_term(body, &_ctx, env)?.eq(ret, env)?;
             Ok(())
@@ -239,7 +239,7 @@ fn type_of_term(term: &Term, ctx: &Ctx, env: &Env) -> Result<Type> {
                 ast::Pattern::Var(_) => _ctx.insert(ty.clone()),
                 _ => types_of_pattern(pat, &ty, &mut _ctx, env)?,
             }
-            usefulness::is_exhaustive(&pat.to(vec![pat.clone()]), &ty, term, env)?;
+            useful::is_exhaustive(&pat.to(vec![pat.clone()]), &ty, term, env)?;
             type_of_term(cnt, &_ctx, env)?.into()
         }
         ast::Term::Assign(var, t, cnt) => {
@@ -249,7 +249,7 @@ fn type_of_term(term: &Term, ctx: &Ctx, env: &Env) -> Result<Type> {
         ast::Term::Lam(args, body) => {
             args.lefts().no_dups()?;
             for (pat, ty) in args {
-                usefulness::is_exhaustive(&pat.to(vec![pat.clone()]), ty, term, env)?;
+                useful::is_exhaustive(&pat.to(vec![pat.clone()]), ty, term, env)?;
             }
             let mut _ctx = ctx.clone();
             for (pat, ty) in args {
@@ -268,7 +268,7 @@ fn type_of_term(term: &Term, ctx: &Ctx, env: &Env) -> Result<Type> {
                     Ok((pat.clone(), type_of_term(term, &_ctx, env)?))
                 })
                 .collect::<Result<_>>()?);
-            usefulness::is_exhaustive(&arms.lefts(), &ty, term, env)?;
+            useful::is_exhaustive(&arms.lefts(), &ty, term, env)?;
             // equal return types
             let mut arms_tys = arms.rights().into().into_iter();
             let first = arms_tys.next().unwrap();
@@ -286,7 +286,7 @@ fn type_of_term(term: &Term, ctx: &Ctx, env: &Env) -> Result<Type> {
             type_of_term(body, &_ctx, env)?.eq(ret, env)?;
             let fun_ty = id.to(ast::Type::Fun(args.rights(), ret.clone()));
             for (pat, ty) in args {
-                usefulness::is_exhaustive(&pat.to(vec![pat.clone()]), ty, term, env)?;
+                useful::is_exhaustive(&pat.to(vec![pat.clone()]), ty, term, env)?;
             }
             type_of_term(cnt, &ctx.mutate(fun_ty), env)?.into()
         }
@@ -377,7 +377,7 @@ fn types_of_pattern(pat: &Pattern, ty: &Type, ctx: &mut Ctx, env: &Env) -> Resul
         ast::Pattern::Wildcard => Ok(()),
         ast::Pattern::Const(t) => ty.eq(&type_of_term(t, ctx, env)?, env),
         ast::Pattern::Struct(id, _, pat) => {
-            ty.eq(&id.to(ast::Type::Var(id.clone())), env)?;
+            ty.eq(&id.to(ast::Type::Name(id.clone())), env)?;
             match ty.as_ref() {
                 ast::Type::Struct(_, var) => types_of_pattern_variant(pat, var, ctx, env),
                 _ => Err(Error::new("pattern type mismatch")
@@ -386,7 +386,7 @@ fn types_of_pattern(pat: &Pattern, ty: &Type, ctx: &mut Ctx, env: &Env) -> Resul
             }
         }
         ast::Pattern::Variant(id, _, var, pat) => {
-            ty.eq(&id.to(ast::Type::Var(id.clone())), env)?;
+            ty.eq(&id.to(ast::Type::Name(id.clone())), env)?;
             match ty.as_ref() {
                 ast::Type::Enum(_, vars) => {
                     let var = vars
@@ -430,7 +430,7 @@ fn type_of_constructor(constr: &Constructor, ctx: &Ctx, env: &Env) -> Result<Var
 
 fn resolve(t: &Type, env: &Env) -> Result<Type> {
     match t.as_ref() {
-        ast::Type::Var(v) => resolve(&env.lookup(v).unwrap(), env),
+        ast::Type::Name(v) => resolve(&env.lookup(v).unwrap(), env),
         _ => Ok(t.clone()),
     }
 }

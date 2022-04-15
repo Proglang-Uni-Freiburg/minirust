@@ -6,7 +6,7 @@ use std::proc;
 use std::time;
 
 
-fn main() {
+/*fn main() {
     match env::args_len() {
         3 => {
             io::println("interpreter executable: " + env::arg(0));
@@ -18,11 +18,15 @@ fn main() {
             proc::exit(conv::str_to_int("1"))
         }
     };
-    let time = time::time_it(||{
-        let file = file::new("/tmp/hallo")
-        file.write("Hello World!");
-        io::println(file.read())
-    })
-    io::println("writing a file takes " + conv::int_to_str(time) + "ms")
+}*/
+
+fn main() {
+    io::println(conv::int_to_str(time::time_it(|| io::println(conv::int_to_str(fib(12))))))
 }
 
+fn fib(n: Int) -> Int {
+    match n {
+        0 | 1 => n,
+        _ => fib(n - 1) + fib(n - 2)
+    }
+}

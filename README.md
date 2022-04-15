@@ -38,7 +38,7 @@ cargo install --path cli
     - `eq.rs`: defines type equality
     - `dups.rs`: filtering duplicated binders or definitions
     - `proj.rs`: handles projections on tuple / record (variants)
-    - `usefulness.rs`: match exhaustiveness & pattern reachability
+    - `useful.rs`: match exhaustiveness & pattern reachability
 - `ffi`
     - `translate.rs`: translates to rust code
     - `lib.rs`: dynamically links rust code & provide type safe call interface
