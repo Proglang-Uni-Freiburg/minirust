@@ -21,7 +21,7 @@ use std::time;
 }*/
 
 fn main() {
-    io::println(conv::int_to_str(time::time_it(|| io::println(conv::int_to_str(fib(12))))))
+    io::println("took " + conv::int_to_str(time::time_it(|| io::println(conv::int_to_str(fib(12))))))
 }
 
 fn fib(n: Int) -> Int {
