@@ -15,9 +15,8 @@ fn ctx_resolve<T: GetCodeRef + Untag<Vec<String>> + std::fmt::Debug>(
 ) -> Result<usize> {
     let u = id.untag();
     if u.len() > 1 {
-        match ctx::resolve(ctx, u.clone()) {
-            Some(s) => return Ok(s),
-            None => {}
+        if let Some(s) = ctx::resolve(ctx, u.clone()) {
+            return Ok(s);
         }
     }
     let mut oid = vec![id.code_ref().0.last().unwrap().clone()];
@@ -40,7 +39,6 @@ pub fn debruijn_program(
             _ => unreachable!(),
         }
     }
-
     Ok(map!(debruijn_top(program, ctx, env)))
 }
 
@@ -158,21 +156,14 @@ fn debruijn_term(term: &FromTerm, ctx: &Ctx<Path>, env: &Ctx<Path>) -> Result<To
                 _ => ast::Term::App(f, a),
             }
         }
-        ast::Term::Let(pat, body, cnt) => {
+        ast::Term::Let(pat, ty, body, cnt) => {
             let mut _ctx = ctx.clone();
-            let pat = map!(debruijn_pattern(pat, &mut _ctx, env));
-            match body.as_ref() {
-                ast::Term::Seq(left, right) => ast::Term::Let(
-                    pat,
-                    map!(debruijn_term(left, ctx, env)),
-                    map!(debruijn_term(right, &_ctx, env)),
-                ),
-                _ => ast::Term::Let(
-                    pat,
-                    map!(debruijn_term(body, ctx, env)),
-                    map!(debruijn_term(cnt, &_ctx, env)),
-                ),
-            }
+            ast::Term::Let(
+                map!(debruijn_pattern(pat, &mut _ctx, env)),
+                map!(debruijn_type(ty, env)),
+                map!(debruijn_term(body, ctx, env)),
+                map!(debruijn_term(cnt, &_ctx, env)),
+            )
         }
         ast::Term::Assign(var, t, cnt) => ast::Term::Assign(
             var.to(ctx_resolve(ctx, var)?),
@@ -313,7 +304,7 @@ fn debruijn_pattern(pat: &FromPattern, ctx: &mut Ctx<Path>, env: &Ctx<Path>) -> 
                 }
             }
             debruijn_pattern(&first, ctx, env)?;
-            ast::Pattern::Or(map!(debruijn_pattern(pats, ctx, env)))
+            ast::Pattern::Or(map!(debruijn_pattern(pats, &mut _ctx, env)))
         }
         ast::Pattern::Struct(id, path, pat) => {
             match ctx_resolve(env, id) {

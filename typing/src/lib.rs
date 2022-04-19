@@ -30,7 +30,7 @@ pub fn type_check(program: &Program) -> Result<Option<FFI>> {
     let mut ffi = false;
     let mut main = false;
 
-    for top in program.as_ref() {
+    for top in program {
         match top.as_ref() {
             ast::Top::Fun(id, args, ret, _) => {
                 if id.as_ref() == "main" {
@@ -47,22 +47,22 @@ pub fn type_check(program: &Program) -> Result<Option<FFI>> {
                     }
                     main = true;
                 }
-                ctx = ctx.mutate(id.to(ast::Type::Fun(args.rights(), ret.clone())))
+                ctx.insert(id.to(ast::Type::Fun(args.rights(), ret.clone())))
             }
             ast::Top::FFIFun(id, args, ret, _) => {
                 ffi = true;
-                ctx = ctx.mutate(id.to(ast::Type::Fun(args.rights(), ret.clone())))
+                ctx.insert(id.to(ast::Type::Fun(args.rights(), ret.clone())))
             }
-            ast::Top::Alias(id, ty) => env = env.mutate(id.to(ty.clone().into())),
+            ast::Top::Alias(id, ty) => env.insert(id.to(ty.clone().into())),
             ast::Top::Struct(id, fields) => {
                 let mut path = id.tag.0.clone();
                 path.push(id.clone().into());
-                env = env.mutate(id.to(ast::Type::Struct(id.to(path), fields.clone())))
+                env.insert(id.to(ast::Type::Struct(id.to(path), fields.clone())))
             }
             ast::Top::Enum(id, vars) => {
                 let mut path = id.tag.0.clone();
                 path.push(id.as_ref().clone());
-                env = env.mutate(id.to(ast::Type::Enum(id.to(path), vars.clone())))
+                env.insert(id.to(ast::Type::Enum(id.to(path), vars.clone())))
             }
             _ => unreachable!(),
         }
@@ -231,14 +231,14 @@ fn type_of_term(term: &Term, ctx: &Ctx, env: &Env) -> Result<Type> {
             resolve(&type_of_term(tup, ctx, env)?, env)?.type_at(int)?
         }
         ast::Term::RecProj(rec, id) => resolve(&type_of_term(rec, ctx, env)?, env)?.type_at(id)?,
-        ast::Term::Let(pat, t, cnt) => {
+        ast::Term::Let(pat, a, t, cnt) => {
             pat.no_dups()?;
             let ty = type_of_term(t, ctx, env)?;
-            let mut _ctx = ctx.clone();
-            match pat.as_ref() {
-                ast::Pattern::Var(_) => _ctx.insert(ty.clone()),
-                _ => types_of_pattern(pat, &ty, &mut _ctx, env)?,
+            if let Some(a) = a {
+                ty.eq(a, env)?;
             }
+            let mut _ctx = ctx.clone();
+            types_of_pattern(pat, &ty, &mut _ctx, env)?;
             useful::is_exhaustive(&pat.to(vec![pat.clone()]), &ty, term, env)?;
             type_of_term(cnt, &_ctx, env)?.into()
         }
@@ -284,11 +284,15 @@ fn type_of_term(term: &Term, ctx: &Ctx, env: &Env) -> Result<Type> {
                 types_of_pattern(pat, ty, &mut _ctx, env)?;
             }
             type_of_term(body, &_ctx, env)?.eq(ret, env)?;
-            let fun_ty = id.to(ast::Type::Fun(args.rights(), ret.clone()));
             for (pat, ty) in args {
                 useful::is_exhaustive(&pat.to(vec![pat.clone()]), ty, term, env)?;
             }
-            type_of_term(cnt, &ctx.mutate(fun_ty), env)?.into()
+            type_of_term(
+                cnt,
+                &ctx.mutate(id.to(ast::Type::Fun(args.rights(), ret.clone()))),
+                env,
+            )?
+            .into()
         }
     }))
 }

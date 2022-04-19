@@ -185,7 +185,7 @@ fn eval_term(
                 .unwrap()
                 .into()
         }
-        ast::Term::Let(pat, body, cnt) => {
+        ast::Term::Let(pat, _, body, cnt) => {
             let mut _ctx = ctx.clone();
             eval_pattern(pat, &eval_term(body, ctx, top_ctx, ffi)?, &mut _ctx).unwrap();
             eval_term(cnt, &mut _ctx, top_ctx, ffi)?.into()

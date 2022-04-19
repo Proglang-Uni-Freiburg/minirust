@@ -139,8 +139,10 @@ peg::parser! {
 
         #[cache_left_rec]
         rule _term() -> ast::Term<Named>
-            = "let" spa() __ p:pattern() __ "=" __ t:term() _ "\n" __ c:term() { ast::Term::Let(p, t, c) }
-            / "let" spa() __ s:position!() p:pattern() e:position!() __ "=" __ t:term() { ast::Term::Let(p, t, Tag::new((path.clone(), (s, e)), ast::Term::Unit)) }
+            = "let" spa() __ p:pattern() __ "=" __ t:term() _ "\n" __ c:term() { ast::Term::Let(p, None, t, c) }
+            / "let" spa() __ s:position!() p:pattern() e:position!() __ "=" __ t:term() { ast::Term::Let(p, None, t, Tag::new((path.clone(), (s, e)), ast::Term::Unit)) }
+            / "let" spa() __ p:pattern() _ ":" _ ty:typ() __  "=" __ t:term() _ "\n" __ c:term() { ast::Term::Let(p, Some(ty), t, c) }
+            / "let" spa() __ s:position!() p:pattern() e:position!()  _ ":" _ ty:typ() __ "=" __ t:term() { ast::Term::Let(p, Some(ty), t, Tag::new((path.clone(), (s, e)), ast::Term::Unit)) }
             / "match" spa() t:term() _ "{" __ ts:lit_sep_plus(",", <lit_tup("=>", <pattern()>, <term()>)>) __ "}" { ast::Term::Match(t, ts) }
             / "fn" spa() i:ident() _ "(" _ ts:lit_sep(",", <lit_tup(":", <pattern()>, <typ()>)>) _ ")" _ "->" _ ty:typ() __ "{" __ t:term() __ "}" _ "\n" __ c:term() { ast::Term::Fun(i, ts, ty, t, c) }
             / "fn" spa() i:ident() _ "(" _ ts:lit_sep(",", <lit_tup(":", <pattern()>, <typ()>)>) _ ")" _ "->" _ ty:typ() __ "{" __ t:term() __ "}" { let i_tag = i.tag.clone(); ast::Term::Fun(i, ts, ty, t, Tag::new(i_tag, ast::Term::Unit)) }
