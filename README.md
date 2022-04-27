@@ -6,18 +6,11 @@ experimental programming language with algebraic data types and pattern matching
 ## usage
 ### install
 ```shell
-git clone https://github.com/Mari-W/foo-lang
-cd foo-lang
-cargo install --path cli
+cargo install --git https://github.com/Mari-W/minirust cli
 ```
 ### usage
 ```shell
-foo path/to/file/with/main.foo
-```
-### update
-```shell
-git pull 
-cargo install --path cli
+minirust path/to/file/with/main.foo
 ```
 
 ## structure & crates

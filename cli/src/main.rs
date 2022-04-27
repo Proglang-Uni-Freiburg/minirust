@@ -15,8 +15,8 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     let now = Instant::now();
 
-    if args.is_empty() {
-        eprintln!("{}", Error::new("expected file path"));
+    if args.len() <= 1 {
+        eprintln!("{}", Error::new("expected path to main file as first argument"));
         std::process::exit(1)
     } else if let Err(e) = run(args[1].clone()) {
         eprintln!("{}", e);
