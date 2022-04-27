@@ -49,7 +49,7 @@ impl Error {
             },
         };
         for ((path, (start, end)), label) in self.items.iter() {
-            let path = format!("{}.foo", &path.join("/"));
+            let path = format!("{}.mrs", &path.join("/"));
             let (source, line, (start, end)) = {
                 match src {
                     Some(ref s) => parse_err(s.clone(), (*start, *end)),

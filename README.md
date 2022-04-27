@@ -1,4 +1,4 @@
-# foo lang
+# mini rust
 
 ## what's this
 experimental programming language with algebraic data types and pattern matching inspired by rust
@@ -8,9 +8,9 @@ experimental programming language with algebraic data types and pattern matching
 ```shell
 cargo install --git https://github.com/Mari-W/minirust cli
 ```
-### usage
+### run
 ```shell
-minirust path/to/file/with/main.foo
+minirust path/to/file/with/main.mrs
 ```
 
 ## structure & crates

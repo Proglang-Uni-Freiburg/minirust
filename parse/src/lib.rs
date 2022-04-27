@@ -22,7 +22,7 @@ pub fn parse<T: AsRef<std::path::Path>>(path: T) -> Result<Program> {
 
     let src = read_to_string(path).map_err(|_| {
         Error::new(format!(
-            "could not find {}.foo from cwd",
+            "could not find {}.mrs from cwd",
             ast_path.join("/")
         ))
     })?;

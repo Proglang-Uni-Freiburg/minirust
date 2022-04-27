@@ -59,7 +59,7 @@ impl FFI {
             .success()
         {
             return Err(Error::new(format!(
-                "rust error in {}.foo",
+                "rust error in {}.mrs",
                 program.tag.0.join("/")
             )));
         }

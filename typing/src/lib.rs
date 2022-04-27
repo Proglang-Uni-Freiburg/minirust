@@ -72,7 +72,7 @@ pub fn type_check(program: &Program) -> Result<Option<FFI>> {
     }
     if !main {
         return Err(Error::new(format!(
-            "main function not found in {}.foo",
+            "main function not found in {}.mrs",
             program.tag.0.join("/")
         )));
     }

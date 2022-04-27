@@ -16,7 +16,7 @@ pub fn resolve(program: &mut Vec<FromTop>, top: &Vec<FromTop>, used: &mut Vec<Pa
                 if !used.contains(&new_path) {
                     used.push(new_path.clone());
                     let new_program = parse(&std::path::Path::new(&format!(
-                        "{}.foo",
+                        "{}.mrs",
                         new_path.join("/")
                     )))?;
                     resolve(program, new_program.as_ref(), used)?;
