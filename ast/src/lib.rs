@@ -146,7 +146,6 @@ pub enum Term<R: ReprItem> {
     RecProj(_Term<R>, _Ident<R>),
 
     Let(_Pattern<R>, Option<_Type<R>>, _Term<R>, _Term<R>),
-    Assign(_Var<R>, _Term<R>, _Term<R>),
 
     Lam(_Vec<R, (_Pattern<R>, _Type<R>)>, _Term<R>),
     Match(_Term<R>, _Vec<R, (_Pattern<R>, _Term<R>)>),

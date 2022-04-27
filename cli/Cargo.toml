@@ -13,5 +13,5 @@ typing = { path = "../typing" }
 eval = { path = "../eval" }
 
 [[bin]]
-name = "foo"
+name = "minirust"
 path = "src/main.rs"

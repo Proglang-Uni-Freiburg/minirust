@@ -190,12 +190,6 @@ fn eval_term(
             eval_pattern(pat, &eval_term(body, ctx, top_ctx, ffi)?, &mut _ctx).unwrap();
             eval_term(cnt, &mut _ctx, top_ctx, ffi)?.into()
         }
-        ast::Term::Assign(var, t, cnt) => {
-            let idx = var.into();
-            let t = eval_term(t, ctx, top_ctx, ffi)?;
-            ctx.update(idx, t);
-            eval_term(cnt, ctx, top_ctx, ffi)?.into()
-        }
         ast::Term::Lam(args, body) => ast::Value::Clos(args.lefts(), body.clone(), ctx.clone()),
         ast::Term::Match(m, pats) => {
             let val = eval_term(m, ctx, top_ctx, ffi)?;

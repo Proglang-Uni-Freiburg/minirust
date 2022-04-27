@@ -159,9 +159,6 @@ peg::parser! {
             / "()" { ast::Term::Unit }
             / "(" __ t:term() __ ")" { t.into() }
             / "{" __ t:term() __ "}" { t.into() }
-            // disabled for now, want `mut` modifiers
-            // s:position!() i:ident() e:position!() _ "=" _ t:term()  _ "\n" __ c:term() { ast::Term::Assign(Tag::new((path.clone(), (s, e)), vec![i]), t, c) }
-            // s:position!() i:ident() e:position!() _ s:position!() "=" e:position!() _ t:term()  { ast::Term::Assign(Tag::new((path.clone(), (s, e)), vec![i]), t,  Tag::new((path.clone(), (s, e)), ast::Term::Unit)) }
             / i:path() { ast::Term::Var(i)   }
 
         #[cache_left_rec]

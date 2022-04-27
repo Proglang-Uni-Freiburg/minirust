@@ -165,11 +165,6 @@ fn debruijn_term(term: &FromTerm, ctx: &Ctx<Path>, env: &Ctx<Path>) -> Result<To
                 map!(debruijn_term(cnt, &_ctx, env)),
             )
         }
-        ast::Term::Assign(var, t, cnt) => ast::Term::Assign(
-            var.to(ctx_resolve(ctx, var)?),
-            map!(debruijn_term(t, ctx, env)),
-            map!(debruijn_term(cnt, ctx, env)),
-        ),
         ast::Term::Fun(bind, args, ty, body, cnt) => {
             let mut _ctx = ctx.clone();
             ast::Term::Fun(

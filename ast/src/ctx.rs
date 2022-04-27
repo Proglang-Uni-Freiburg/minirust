@@ -24,10 +24,6 @@ impl<T: Clone> Ctx<T> {
         Some(self.0.get(u.into())?.clone())
     }
 
-    pub fn update(&mut self, idx: usize, t: T) {
-        self.0[idx] = t;
-    }
-
     pub fn iter(&self) -> impl Iterator<Item = &T> {
         self.0.iter()
     }

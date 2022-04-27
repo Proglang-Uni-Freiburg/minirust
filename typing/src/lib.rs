@@ -242,10 +242,6 @@ fn type_of_term(term: &Term, ctx: &Ctx, env: &Env) -> Result<Type> {
             useful::is_exhaustive(&pat.to(vec![pat.clone()]), &ty, term, env)?;
             type_of_term(cnt, &_ctx, env)?.into()
         }
-        ast::Term::Assign(var, t, cnt) => {
-            type_of_term(t, ctx, env)?.eq(&ctx.lookup(var).unwrap(), env)?;
-            type_of_term(cnt, ctx, env)?.into()
-        }
         ast::Term::Lam(args, body) => {
             args.lefts().no_dups()?;
             for (pat, ty) in args {
