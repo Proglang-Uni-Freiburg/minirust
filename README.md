@@ -495,17 +495,26 @@ fn deconstruct(pattern: Pattern) -> DeconstructedPattern {
         // only one way to instantiate a struct
         // by design it only can have a `Unit`, `Tup` or `Rec` sub-pattern, so we take their sub-patterns as
         // the structs sub-pattern.
-        Struct(_, _, sub_pattern) => DeconstructedPattern( Single, deconstruct(sub_pattern).sub_patterns )
+        Struct(_, _, sub_pattern) => {
+            DeconstructedPattern( Single, deconstruct(sub_pattern).sub_patterns )
+        }
 
         // equivalent to structs, but only covers one variant of the enum
-        Variant(_, _, name, sub_pattern) => DeconstructedPattern( Variant(name), deconstruct(sub_pattern).sub_patterns )
+        Variant(_, _, name, sub_pattern) => {
+            DeconstructedPattern( Variant(name), deconstruct(sub_pattern).sub_patterns )
+        }
 
         // we need to recursively unpack nested `Or` patterns
-        Or(sub_patterns) => DeconstructedPattern( Or, flattened([deconstruct(sub_pattern).sub_patterns for sub_pattern in sub_patterns]) )
+        Or(sub_patterns) => {
+            DeconstructedPattern( Or, flattened([deconstruct(sub_pattern).sub_patterns for sub_pattern in sub_patterns]) )
+        }
 
         Unit => DeconstructedPattern( Single, [] ),
         
-        Tuple(sub_patterns) =>  DeconstructedPattern( Single, [deconstruct(sub_pattern) for sub_pattern in sub_patterns] ),
+        Tuple(sub_patterns) => { 
+            DeconstructedPattern( Single, [deconstruct(sub_pattern) for sub_pattern in sub_patterns] )
+        },
+        
     }
 }
 ```
