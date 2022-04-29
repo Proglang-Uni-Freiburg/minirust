@@ -417,7 +417,12 @@ ast::Value::Int(i)
 Although this is using `unsafe`, since we translated the mini rust function correctly to the rust definition, this won't fail. 
 
 ### Pattern Exhaustiveness & Reachability
-When implementing pattern matching you need to ensure that a pattern is _exhaustive_ to keep your language sound. Further you may want to ensure that all branches of a match statement are _reachable_, tough this is not necessary but rather a design decision. The [`usefulness`-algorithm](https://doc.rust-lang.org/nightly/nightly-rustc/rustc_mir_build/thir/pattern/usefulness/index.html) is used to test a list of patterns (can be a list of an single element, when using `let` or function argument patterns) on exhaustiveness and reachability.
+When implementing pattern matching you need to ensure that a pattern is _exhaustive_ to keep your language sound. Further you may want to ensure that all branches of a match statement are _reachable_, tough this is not necessary but rather a design decision. 
+
+The [`usefulness`-algorithm](https://doc.rust-lang.org/nightly/nightly-rustc/rustc_mir_build/thir/pattern/usefulness/index.html) is used to test a list of patterns on exhaustiveness and reachability. A list of an single element can be used, e.g. when using `let` or function argument patterns. The Algorithm takes a list of patterns `ps` and one pattern `q` to test if `q` is useful with respect to the patterns `ps` before it. 
+
+When all patterns are useful with respect to the patterns for them, there is no _unreachable_ pattern.
+The list of patterns is _exhaustive_ iff the wildcard pattern is **not** useful.   
 
 First patterns are _deconstructed_ to a `DeconstructedPattern` which consists of a `PatternConstructor` and a list of _deconstructed_ sub-patterns given by the following **pseudo** code:
 
@@ -477,9 +482,9 @@ The destruction is defined as follows:
 fn deconstruct(pattern: Pattern) -> DeconstructedPattern { 
     match pattern {
         // variables and wildcards cover everything and have no sub patterns
-        Variable(_) | Wildcard => DeconstructedPattern( Wildcard, [] ),
+        Variable | Wildcard => DeconstructedPattern( Wildcard, [] ),
         
-        Constant(c) => match c type {
+        Constant(constant) => match type constant {
             Unit => DeconstructedPattern( Single, [] ),
 
             // booleans are translated to int ranges for simplicity
@@ -495,12 +500,12 @@ fn deconstruct(pattern: Pattern) -> DeconstructedPattern {
         // only one way to instantiate a struct
         // by design it only can have a `Unit`, `Tup` or `Rec` sub-pattern, 
         // so we take their sub-patterns as the structs sub-pattern.
-        Struct(_, _, sub_pattern) => {
+        Struct(sub_pattern) => {
             DeconstructedPattern( Single, deconstruct(sub_pattern).sub_patterns )
         }
 
         // equivalent to structs, but only covers one variant of the enum
-        Variant(_, _, name, sub_pattern) => {
+        Variant(name, sub_pattern) => {
             DeconstructedPattern( Variant(name), deconstruct(sub_pattern).sub_patterns )
         }
 
@@ -534,6 +539,66 @@ fn deconstruct(pattern: Pattern) -> DeconstructedPattern {
 We now have translated our input, a list of patterns, to a list of deconstructed patterns.
 Next we need to implement to helper functions for our final `usefulness`-algorithm.
 
+First we want to _split_ one deconstructed pattern `q` with respect to patterns `ps`. The idea of `constructor splitting` is to group together constructors that behave the same way and list all constructors implied by `q`. For example the wildcard deconstructed pattern implies to cover _all_ the constructors of a given pattern and the ranges `(0, 0)` and `(0, 1)` can be grouped to be one range `(0, 1)`. Consider the following pseudo code:
+
+```rust
+// returns all possible constructors for a given pattern by the type it tries to match
+fn all_constructors(pattern: DeconstructedPattern) -> [PatternConstructor] {
+    match type pattern {
+        Unit | Tup | Rec | Struct => [Single],
+        // can only be 0 or 1
+        Bool => [Range(0, 1)],
+        Int => [Range(i64::MAX, i64::MIN)],
+        Str => [NonExhaustive],
+        // enum has all variants as possible constructor
+        Enum(variants) => [Variant(variant) for  variant in variants]
+    }
+}
+
+// returns `true` if `pattern` is covered by `other`, `false` otherwise
+fn covered_by(pattern: DeconstructedPattern, other: DeconstructedPattern) {
+    match (pattern, other) {
+        // pattern is always covered by wildcard
+        (_, Wildcard) => true,
+        // wildcard cannot be covered
+        (Wildcard, _) => false
+        
+        (Single, Single) => true
+
+        // range:                    lo -------- hi
+        // other_range      other_hi --------------- other_lo
+        (Range(lo, hi), Range(other_lo, other_hi)) => lo >= other_lo && hi <= other_hi
+
+    }
+}
+
+fn split(pattern: DeconstructedPattern, others: [DeconstructedPattern]) -> [DeconstructedPattern] {
+    match pattern {
+        Range(lo, hi) => {
+            others
+                // only take other ranges inside `others` into account
+                .filter_map_by(Range) 
+                // range:            lo ------------------------ hi
+                // other_range:          other_hi ---- other_lo
+                // -> keep `other_range` if contained by `range`
+                .filter_map_contained_by(pattern)
+                // sort the ranges and merge two consecutive ranges if they 
+                // are connecting, e.g. end of previous is start of next
+                .group()
+        },
+        Wildcard => {
+            let all: [PatternConstructor] = all_constructors(pattern)
+                // recursively split all the possible constructors for the wildcard with respect to
+                // the others
+                .flat_map_split_by(others);
+            
+
+        }
+        // nothing to split
+        _ => [pattern]
+    }
+}
+```
 
 
 ## Project Structure
