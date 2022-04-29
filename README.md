@@ -170,7 +170,7 @@ fn fib(n: Int) -> Int {
 ```
 
 ##### Foreign Function Definition
-These functions contain rust code inside their body. This code will be compiled and linked at runtime and can be called from inside the interpreter. The FFI is completely type safe and currently only supports 2 argument functions with base types, though a prototype for ADT support exists, but more work would need to be done. This _should_ be the only place where runtime errors can occur. Every function does return a dynamic result, so you can use the `?` operator.
+These functions contain rust code inside their body. This code will be compiled and linked at runtime and can be called from inside the interpreter. The FFI is completely type safe and currently only supports 2 argument functions with base types, though a prototype for ADT support exists, but more work would need to be done. This _should_ be the only place where runtime errors can occur. Every function does return a dynamic result, so you can use the `?` error monad.
 
 ```rust
 fn arg(idx: Int) -> Str {~
@@ -197,9 +197,9 @@ x + 42 - 42
 ##### Let Bindings
 Let bindings supports pattern syntax and optional type annotations, though these are just checked against the type the type checker expects.
 ```rust
-let (x, y) = (42, 42)
 let (a, b): (Int, Int) = (42, 42)
-let computed = {
+let (x, y) = (42, 42)
+let z = {
     (42 + 42) / 2
 }
 ```
@@ -364,16 +364,17 @@ fn f(s: Env<0>) -> Bool {
     let or_false = |x: Bool| {
         // f will be translated to the index 2
         // because two variables (both names x) are bound in between
+        // and x will be translated to the closest x in scope
         Ctx<0> | Ctx<2>
     }
     
     Ctx<0>(Ctx<1>)
 }
 ```
-where `Env` is a vector that holds the types corresponding type at position of the debruijn index and `Ctx` the values respectively.
+where `Env` is a vector that holds the corresponding types at the position of the debruijn indices and `Ctx` the values respectively.
 
 ### Foreign Function Interface
-All FFI functions will be compiled during type checking. Only if compilation of the rust code succeeds the type checker will succeed. Type safety is guaranteed because the function definitions itself are written in mini rust and then correctly translated to the corresponding rust function definitions. After successful compiling the rust library is dynamically linked to the interpreter as [`dylib`](https://doc.rust-lang.org/reference/linkage.html). Using the `libloading` crate the `dylib` functions can be called at runtime. Consider this example which converts a mini rust str to an integer using rust:
+All FFI functions will be compiled during type checking. Only if compilation of the rust code succeeds the type checker will succeed. Type safety is guaranteed because the function definitions itself are written in mini rust and then correctly translated to the corresponding rust function definitions. After successful compiling, it is dynamically linked to the interpreter as [`dylib`](https://doc.rust-lang.org/reference/linkage.html). Using the `libloading` crate the `dylib` functions can be called at runtime. Consider this mini rust example which converts a `Str` to an `Int` using rust:
 ```rust
 fn str_to_int(s: Str) -> Int {~
     s.parse::<i64>()?
@@ -384,7 +385,7 @@ fn main() {
 }
 ```
 
-it will be translated to the following rust code:
+This will be translated to the following rust code:
 
 ```rust
 type DynResult<T> = std::result::Result<T, Box<dyn std::error::Error>>
@@ -401,7 +402,7 @@ fn str_to_int(s: String) -> DynResult<i64> {
 
 ```
 
-and will later be called from `main`inside the interpreter like this:
+and will later be called from mini rust's `main` function like this:
 
 ```rust
 type DynResult<T> = std::result::Result<T, Box<dyn std::error::Error>>
@@ -413,15 +414,27 @@ let i: i64 = unsafe {
 
 ast::Value::Int(i)
 ```
-
-Although this is using `unsafe`, since we translated the mini rust function correctly to the rust definition, this won't fail. 
+Although this is using `unsafe`, since we translated the mini rust function definition correctly to the rust definition, this won't fail. 
 
 ### Pattern Exhaustiveness & Reachability
-When implementing pattern matching you want to ensure that a pattern is _exhaustive_ to keep your language sound. Further you may want to ensure that all branches of a match statement are _reachable_, tough this is not necessary but rather a design decision. 
+In the following section a complete rust pseudo code algorithm will be given to implement exhaustiveness and reachability.
 
-The [`usefulness`-algorithm](https://doc.rust-lang.org/nightly/nightly-rustc/rustc_mir_build/thir/pattern/usefulness/index.html) is used to test a list of patterns on exhaustiveness and reachability. A list of an single element can be used, e.g. when using `let` or function argument patterns. The Algorithm takes a list of patterns `ps` and one pattern `q` to test if `q` is useful with respect to the patterns `ps` before it. 
+We will assume that the pattern were already type checked. Because of that we can assume that are on the same position and level have the same type.
 
-When all patterns are useful with respect to the patterns for them, there is no _unreachable_ pattern.
+```rust
+// wouldn't type check 
+match (42, (42, 42)) {
+    (42, (42, "42"))
+    (42, (42, 42)) => 42
+    _ => -42
+}
+```
+
+When implementing pattern matching we want to ensure that a pattern is _exhaustive_, that is, all possible patterns are covered by a pattern. Further we want that all patterns of a match term are _reachable_, that is, they can be reached by _any_ of all possible input's with respect to the patterns before it.
+
+The [`usefulness`-algorithm](https://doc.rust-lang.org/nightly/nightly-rustc/rustc_mir_build/thir/pattern/usefulness/index.html) is used to test a list of patterns on exhaustiveness and reachability. A list of an single element can be used, e.g. when checking `let` or function argument patterns. The Algorithm takes a (possibly empty) list of patterns `ps` and one pattern `q` to test if `q` is useful with respect to the patterns `ps` before it. 
+
+When all patterns are useful with respect to the patterns before them, there is no _unreachable_ pattern.
 The list of patterns is _exhaustive_ iff the wildcard pattern is **not** useful.   
 
 First patterns are _deconstructed_ to a `DeconstructedPattern` which consists of a `PatternConstructor` and a list of _deconstructed_ sub-patterns given by the following **pseudo** code:
@@ -442,7 +455,7 @@ enum Pattern {
     // Enum::Variant (x, y)
     // ^^^^  ^^^^^^^ ^^^^^^
     // name  variant sub-p
-    Variant(Strong, String, Pattern),
+    Variant(String, String, Pattern),
 
     // contains list of branches
     Or([Pattern]),
@@ -479,59 +492,59 @@ struct DeconstructedPattern {
 }
 ```
 
-The destruction is defined as follows:
+The deconstruction is defined as follows:
 
 ```rust
 fn deconstruct(pattern: Pattern) -> DeconstructedPattern { 
     match pattern {
         // variables and wildcards cover everything and have no sub patterns
-        Variable | Wildcard => DeconstructedPattern( Wildcard, [] ),
+        Variable | Wildcard => DeconstructedPattern(Wildcard, []),
         
         Constant(constant) => match constant type {
-            Unit => DeconstructedPattern( Single, [] ),
+            Unit => DeconstructedPattern(Single, []),
 
             // booleans are translated to int ranges for simplicity
-            True => DeconstructedPattern( Range(0, 0), [] ),
-            False => DeconstructedPattern( Range(1, 1), [] ),
+            True => DeconstructedPattern(Range(0, 0), []),
+            False => DeconstructedPattern(Range(1, 1), []),
 
-            Int(i) => DeconstructedPattern( Range(i, i), [] ),
+            Int(i) => DeconstructedPattern(Range(i, i), []),
 
             // Str cannot be exhausted (too many possibilities)
-            Str => DeconstructedPattern( NonExhaustive, [] ),
+            Str => DeconstructedPattern(NonExhaustive, []),
         }
 
         // only one way to instantiate a struct.
         // by design it only can have a `Unit`, `Tup` or `Rec` sub-pattern, 
         // so we take their sub-patterns as the structs sub-pattern.
         Struct(sub_pattern) => {
-            DeconstructedPattern( Single, deconstruct(sub_pattern).sub_patterns )
+            DeconstructedPattern(Single, deconstruct(sub_pattern).sub_patterns)
         }
 
         // equivalent to structs, but only covers one variant of the enum
         Variant(name, sub_pattern) => {
-            DeconstructedPattern( Variant(name), deconstruct(sub_pattern).sub_patterns )
+            DeconstructedPattern(Variant(name), deconstruct(sub_pattern).sub_patterns)
         }
 
-        // we need to recursively unpack nested `Or` patterns
         Or(sub_patterns) => {
-            DeconstructedPattern( Or, 
-                flatten([deconstruct(sub_pattern).sub_patterns for sub_pattern in sub_patterns]) 
+            DeconstructedPattern(Or, 
+                // code for recursively expanding nested or-patterns is omitted
+                flatten([deconstruct(expand(sub_pattern)) for sub_pattern in sub_patterns]) 
             )
         }
 
         // single constructor
-        Unit => DeconstructedPattern( Single, [] ),
+        Unit => DeconstructedPattern(Single, []),
         
         // again only one way to instantiate a tuple but has sub-patterns
         Tuple(sub_patterns) => { 
-            DeconstructedPattern( Single, 
+            DeconstructedPattern(Single, 
                 [deconstruct(sub_pattern) for sub_pattern in sub_patterns] 
             )
         },
 
         // equivalent to tuples
         Record(sub_patterns) => { 
-            DeconstructedPattern( Single, 
+            DeconstructedPattern(Single, 
                 [deconstruct(sub_pattern) for (_, sub_pattern) in sub_patterns] 
             )
         },
@@ -539,10 +552,39 @@ fn deconstruct(pattern: Pattern) -> DeconstructedPattern {
 }
 ```
 
+Let's see an example:
+
+```rust
+// consider the 3 patterns of this match term
+match (42, 42) {
+    (42, x) | ((x, 42) | (-42, -42)) => 42
+    _ => 42
+}
+
+// would be deconstructed like this
+let patterns: [DeconstructedPattern] = [
+    DeconstructedPattern(Or, [
+        DeconstructedPattern(Single, [
+            DeconstructedPattern(Range(42, 42), []), 
+            DeconstructedPattern(Wildcard, [])
+        ]),
+        DeconstructedPattern(Single, [
+            DeconstructedPattern(Wildcard, []), 
+            DeconstructedPattern(Range(42, 42), [])
+        ]),
+        DeconstructedPattern(Single, [
+            DeconstructedPattern(Range(-42, -42), [])
+            DeconstructedPattern(Range(-42, -42), [])
+        ]),
+    ]),
+    DeconstructedPattern(Wildcard, [])
+]
+```
+
 We now have translated our input, a list of patterns, to a list of deconstructed patterns.
 Next we need to implement to helper functions for our final `usefulness`-algorithm.
 
-First we implement two small helper functions `all_constructors` for listing all constructors for a given pattern by the type it tries to cover and  `covered_by` to check if a pattern _covers_, (e.g. a range includes another) the other pattern:
+First we implement two small helper functions `all_constructors` for listing all constructors for a given pattern by the type it tries to cover and  `covered_by` to check if a pattern _covers_ (e.g. range includes another) the other pattern:
 
 ```rust
 // returns all possible constructors for a given pattern by the type it tries to match
@@ -793,6 +835,8 @@ fn is_exhaustive(patterns: [Pattern]) -> .. {
 }
 ```
 Currently Witnesses for non-exhaustiveness are not supported but should be fairly easy to implement.
+
+
 
 ## Project Structure
 - `ast`
