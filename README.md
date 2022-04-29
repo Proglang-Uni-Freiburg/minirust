@@ -1,7 +1,7 @@
 # Mini Rust
 
 ## About
-An interpreter for a subset of the rust language. The main focus of this project was to algebraic data types with pattern matching.
+An interpreter for a subset of the rust language. The main focus of this project was to implement algebraic data types (ADT's) with pattern matching.
 
 ### Language Features
 - statically typed
@@ -76,11 +76,13 @@ let b: Bool = true
 ```
 
 #### Int
+Supports 64-bit integers.
 ```rust
 let i: Int = 42
 ```
 
 #### Str
+Supports `UTF-8` characters.
 ```rust
 let s: Str = "Hello World!"
 ```
@@ -131,14 +133,147 @@ fn origin_dim3() -> Point {
 ### Terms
 
 #### Top Level
-There can only be 5 different terms at the top level.
+At the top level only few terms are allowed. The order in which top level terms are written _does not_ matter, while inside a top level function the language is purely functional and order does matter.
 
-##### Alias
+##### Type Definition
+Type definitions are only allowed at top level.
 ```rust
+struct UnitStruct
+struct TupleStruct(Int, Int)
+struct RecordStruct{x: Int, y: Int}
+
+enum Enum {
+    UnitVariant,
+    TupleVariant(Int, Int),
+    RecordVariant{x: Int, y: Int},
+    RecursiveVariant(Enum)
+}
 ```
 
-#### Operators
-##### Int
+##### Function Definition
+Top level functions can recurse while inner functions (functions definition inside function) can't. The `main` function is used as entry point into the program and cannot have arguments or return anything other than `()`.
+
+```rust
+use std::io
+use std::conv
+
+fn main() {
+    io::println(conv::int_to_str(fib(10)))
+}
+
+fn fib(n: Int) -> Int {
+    match n {
+        0 | 1 => n,
+        _ => fib(n - 1) + fib(n - 2)
+    }
+}
+```
+
+##### Foreign Function Definition
+These functions contain rust code inside their body. This code will be compiled and linked at runtime and can be called from inside the interpreter. The FFI is completely type safe and currently only supports 2 argument functions with base types, though a prototype for ADT support exists, but more work would need to be done. This _should_ be the only place where runtime errors can occur. Every function does return a dynamic result, so you can use the `?` operator.
+```rust
+fn arg(idx: Int) -> Str {~
+    use std::env;
+    use std::convert::TryFrom;
+    env::args().collect::<Vec<String>>()[usize::try_from(idx)?].clone()
+~}
+
+fn args_len() -> Int {~
+    use std::env;
+    use std::convert::TryInto;
+    env::args().len().try_into()?
+~}
+```
+
+#### Inside functions
+Inside functions the language is purely functional, although it might not always seems like it is. Consider this example where the `let` binds a new variable `x` in the continuation term `x + 42 - 42`. When missing a continuation it becomes `()`. The `in` keyword was omitted to match rust's syntax.
+```rust
+let x = 42
+x + 42 - 42
+```
+
+##### Let Bindings
+Let bindings supports pattern syntax and optional type annotations, though these are just checked against the type the type checker expects.
+```rust
+let (x, y) = (42, 42)
+let (a, b): (Int, Int) = (42, 42)
+let computed = {
+    (42 + 42) / 2
+}
+```
+
+##### Sequencing
+A sequence _ignores_ the type of the left term and continues with the right term. In this example the `Int` value produced by the match term is ignored and the sequence has type `Str`.
+```rust
+match 42 {
+    0 => 1
+    1 => 0
+    _ => 42
+};
+"Hello World!"
+``` 
+
+##### Anonymous & Nested Functions
+```rust
+use std::assert;
+
+fn compose(f: Int -> Int, g: Int -> Int) -> Int -> Int {
+    fn composed(i: Int) {
+         f(g(i))
+    }
+    composed
+}
+fn main() {
+    let id = compose(|i: Int| i + 1, |i: Int| i - 1)
+    assert::assert(id(42) == 42, "should be identity!")
+}
+```
+
+##### Projections
+You can project to a tuple (-struct, -variant) by using constant `Int`'s and to a record (-struct, -variant) by using constant `Str`'s
+```rust
+let t = (42, 42)
+let x: Int = t.0
+
+let r = { x: 42, y: 42 }
+let x = r.x
+```
+
+##### Pattern Matching
+There are several patterns to match on any value, including ADT's. You can use a binder as pattern, or if you don't care about the actual value, a wildcard pattern, which acts the same as the binder expect it does not introduce a new variable. You can also use any constant value as pattern, e.g. `42` when matching on `Int`. You can match on a tuple (-struct, -variant) or record (-struct, -variant) as well. Finally there is the or pattern `|` in which case one of the branch patterns can match to match the or pattern. All branches of one or pattern must introduce exactly
+the same variables. You can also use patterns in `let` bindings and function arguments.
+```rust
+struct Struct {
+    t: (Int, Int)
+}
+
+enum Enum {
+    Tup((Int, Int)),
+    Rec(Struct),
+    Unit
+}
+
+fn match_pattern(e: Enum) -> Int {
+    match e {
+        Enum::Tup((x, 42)) | Enum::Tup((_, x)) => x,
+        Enum::Rec(Struct { t: (x, y) }) => x + y,
+        _ => 42
+    }
+}
+
+fn arg_pattern((x, y): (Int, Int)) -> Int {
+    x + y
+}
+
+fn let_pattern() {
+    let { x, y } = { x: 42, y: 42 }
+    let _ = -42
+}
+
+```
+##### Operators
+
+###### Int
 ```rust
 let x = 42
 let y = 42
@@ -153,7 +288,7 @@ let lt: Bool = x < y
 let lte: Bool = x <=y
 ```
 
-##### Bool
+###### Bool
 ```rust
 let t = true
 let f = false
@@ -162,7 +297,7 @@ let and: Bool = t & f
 let or: Bool = t | f
 ```
 
-##### Equality
+###### Equality
 Equality works on any type including ADT's.
 
 ```rust

@@ -1,0 +1,5 @@
+fn assert(assertion: Bool, message: Str) {~
+    if !assertion {
+        return Err(format!("{}", message).into())
+    }
+~}
