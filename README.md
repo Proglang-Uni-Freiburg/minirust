@@ -417,7 +417,7 @@ ast::Value::Int(i)
 Although this is using `unsafe`, since we translated the mini rust function correctly to the rust definition, this won't fail. 
 
 ### Pattern Exhaustiveness & Reachability
-When implementing pattern matching you need to ensure that a pattern is _exhaustive_ to keep your language sound. Further you may want to ensure that all branches of a match statement are _reachable_, tough this is not necessary but rather a design decision. 
+When implementing pattern matching you want to ensure that a pattern is _exhaustive_ to keep your language sound. Further you may want to ensure that all branches of a match statement are _reachable_, tough this is not necessary but rather a design decision. 
 
 The [`usefulness`-algorithm](https://doc.rust-lang.org/nightly/nightly-rustc/rustc_mir_build/thir/pattern/usefulness/index.html) is used to test a list of patterns on exhaustiveness and reachability. A list of an single element can be used, e.g. when using `let` or function argument patterns. The Algorithm takes a list of patterns `ps` and one pattern `q` to test if `q` is useful with respect to the patterns `ps` before it. 
 
@@ -467,7 +467,10 @@ enum PatternConstructor {
     Range(Int, Int),
 
     // cannot be covered
-    NonExhaustive
+    NonExhaustive,
+
+    // internally used to represent missing constructors
+    Missing([PatternConstructor])
 }
 
 struct DeconstructedPattern {
@@ -539,7 +542,7 @@ fn deconstruct(pattern: Pattern) -> DeconstructedPattern {
 We now have translated our input, a list of patterns, to a list of deconstructed patterns.
 Next we need to implement to helper functions for our final `usefulness`-algorithm.
 
-First we want to _split_ one deconstructed pattern `q` with respect to patterns `ps`. The idea of `constructor splitting` is to group together constructors that behave the same way and list all constructors implied by `q`. For example the wildcard deconstructed pattern implies to cover _all_ the constructors of a given pattern and the ranges `(0, 0)` and `(0, 1)` can be grouped to be one range `(0, 1)`. Consider the following pseudo code:
+First we implement two small helper functions `all_constructors` for listing all constructors for a given pattern by the type it tries to cover and  `covered_by` to check if a pattern _covers_, (e.g. a range includes another) the other pattern:
 
 ```rust
 // returns all possible constructors for a given pattern by the type it tries to match
@@ -556,49 +559,94 @@ fn all_constructors(pattern: DeconstructedPattern) -> [PatternConstructor] {
 }
 
 // returns `true` if `pattern` is covered by `other`, `false` otherwise
+// the algorithm e
 fn covered_by(pattern: DeconstructedPattern, other: DeconstructedPattern) {
     match (pattern, other) {
         // pattern is always covered by wildcard
         (_, Wildcard) => true,
-        // wildcard cannot be covered
-        (Wildcard, _) => false
+        // wildcard and missing constructors cannot be covered
+        (Wildcard | Missing, _) => false
         
         (Single, Single) => true
 
-        // range:                    lo -------- hi
-        // other_range      other_hi --------------- other_lo
+        // range:                     lo -------- hi
+        // other_range      other_hi ---------------- other_lo
         (Range(lo, hi), Range(other_lo, other_hi)) => lo >= other_lo && hi <= other_hi
 
+        (Variant(variant), Variant(other_variant)) => variant == other_variant
+
+        // non-exhaustive patterns cannot be covered
+        (NonExhaustive, _) => false
     }
 }
+```
 
+Second we want to _split_ a deconstructed pattern `q` with respect to patterns `ps`. The idea of `constructor splitting` is to group together constructors that behave the same way and list all constructors implied by `q`. For example the wildcard deconstructed pattern implies to cover _all_ the constructors of a given pattern and the ranges `(0, 0)` and `(0, 1)` can be grouped to be one range `(0, 1)`. Consider the following pseudo code:
+
+```rust
 fn split(pattern: DeconstructedPattern, others: [DeconstructedPattern]) -> [DeconstructedPattern] {
     match pattern {
         Range(lo, hi) => {
             others
                 // only take other ranges inside `others` into account
-                .filter_map_by(Range) 
+                .filter(|other| other is Range) 
                 // range:            lo ------------------------ hi
                 // other_range:          other_hi ---- other_lo
                 // -> keep `other_range` if contained by `range`
-                .filter_map_contained_by(pattern)
+                .filter(|other| is_covered(other, range))
                 // sort the ranges and merge two consecutive ranges if they 
                 // are connecting, e.g. end of previous is start of next
                 .group()
         },
         Wildcard => {
+            // get all possible constructors
             let all: [PatternConstructor] = all_constructors(pattern)
-                // recursively split all the possible constructors for the wildcard with respect to
-                // the others
-                .flat_map_split_by(others);
-            
+                // recursively split all the possible constructors for the wildcard 
+                // with respect to the others and merge them 
+                // recursion will indefinitely stop because split itself
+                // does not returns wildcards
+                .flat_map(|constructor| constructor.split(others));
 
+            let others: [PatternConstructor] = others
+                    // remove all wildcards from `others`
+                    // they would cover everything
+                    .filter(|other| !(other is Wildcard))
+
+            let missing: [PatternConstructor] = all
+                // is `others` covering all the possibilities?
+                .filter(|constructor| 
+                    !others
+                        // keep the `constructor` if it is not covered by any
+                        // `other` constructor from `others` to collect
+                        // all constructors not covered by others 
+                        .any(|other| covered_by(constructor, other))
+                )
+            
+            // if condition is met we have some uncovered constructors
+            if not_covered_by_others.is_not_empty() {
+                // if not all constructors are missing
+                // we return which of them are actually missing
+                if others.is_not_empty() {
+                    [Missing(missing)]
+                }
+                // otherwise we return all constructors are missing
+                // which is equivalent to return wildcard
+                else {
+                    [Wildcard]
+                }
+            } 
+            // if all constructors are covered we return them all
+            else {
+                all
+            }
         }
         // nothing to split
         _ => [pattern]
     }
 }
 ```
+
+Finally we need to _specialize_ 
 
 
 ## Project Structure
