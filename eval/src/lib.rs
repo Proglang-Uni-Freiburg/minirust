@@ -3,7 +3,7 @@ use ast::tag::Split;
 use ast::Debruijn;
 use ast::{
     ctx::Ctx,
-    err::{Error, Result},
+    err::Result,
     map,
 };
 use ffi::FFI;
@@ -30,7 +30,6 @@ pub fn eval(program: &Program, ffi: &Option<FFI>) -> Result<Value> {
             _ => {}
         }
     }
-    // println!("CTX {}", ctx.iter().map(|x| format!("{}", x)).collect::<Vec<String>>().join(","));
     let top_ctx = ctx.clone();
     eval_term(main.unwrap(), &mut ctx, &top_ctx, ffi)
 }
@@ -43,10 +42,9 @@ fn eval_term(
 ) -> Result<Value> {
     Ok(t.to(match t.as_ref() {
         ast::Term::Var(i) => {
-            // println!("CTX {} - {}", ctx.iter().map(|x| format!("{}", x)).collect::<Vec<String>>().join(","), i);
             match ctx.lookup(i) {
                 Some(s) => s.into(),
-                None => return Err(Error::new("interpreter bug").label(t, "should be resolved")),
+                None => unreachable!(),
             }
         }
         ast::Term::Unit => ast::Value::Unit,

@@ -168,22 +168,22 @@ peg::parser! {
             l:(@) _ ";" __ r:@ { ast::Term::Seq(l, r) }
             l:(@) _ s:position!() ";" e:position!() { let l_tag = l.tag.clone(); ast::Term::Seq(l, Tag::new((path.clone(), (s, e)), ast::Term::Unit)) }
             --
-            x:(@) _ s:position!() "==" e:position!() _ y:@ { ast::Term::BinOp(x, Tag::new((path.clone(), (s, e)), ast::BinOp::Eq), y) }
-            x:(@) _ s:position!() "!=" e:position!() _ y:@ { ast::Term::BinOp(x, Tag::new((path.clone(), (s, e)), ast::BinOp::Neq), y) }
+            x:(@) __ s:position!() "==" e:position!() __ y:@ { ast::Term::BinOp(x, Tag::new((path.clone(), (s, e)), ast::BinOp::Eq), y) }
+            x:(@) __ s:position!() "!=" e:position!() __ y:@ { ast::Term::BinOp(x, Tag::new((path.clone(), (s, e)), ast::BinOp::Neq), y) }
             --
-            x:(@) _ s:position!() ">" e:position!() _ y:@ { ast::Term::BinOp(x, Tag::new((path.clone(), (s, e)), ast::BinOp::Gt), y) }
-            x:(@) _ s:position!() ">=" e:position!() _ y:@  { ast::Term::BinOp(x, Tag::new((path.clone(), (s, e)), ast::BinOp::Gte), y) }
-            x:(@) _ s:position!() "<" e:position!() _ y:@  { ast::Term::BinOp(x, Tag::new((path.clone(), (s, e)), ast::BinOp::Lt), y) }
-            x:(@) _ s:position!() "<=" e:position!() _ y:@  { ast::Term::BinOp(x, Tag::new((path.clone(), (s, e)), ast::BinOp::Lte), y) }
+            x:(@) __ s:position!() ">" e:position!() __ y:@ { ast::Term::BinOp(x, Tag::new((path.clone(), (s, e)), ast::BinOp::Gt), y) }
+            x:(@) __ s:position!() ">=" e:position!() __ y:@  { ast::Term::BinOp(x, Tag::new((path.clone(), (s, e)), ast::BinOp::Gte), y) }
+            x:(@) __ s:position!() "<" e:position!() __ y:@  { ast::Term::BinOp(x, Tag::new((path.clone(), (s, e)), ast::BinOp::Lt), y) }
+            x:(@) __ s:position!() "<=" e:position!() __ y:@  { ast::Term::BinOp(x, Tag::new((path.clone(), (s, e)), ast::BinOp::Lte), y) }
             --
-            x:(@) _ s:position!() "+" e:position!() _ y:@  { ast::Term::BinOp(x, Tag::new((path.clone(), (s, e)), ast::BinOp::Add), y) }
-            x:(@) _ s:position!() "-" e:position!() _ y:@ { ast::Term::BinOp(x, Tag::new((path.clone(), (s, e)), ast::BinOp::Sub), y) }
+            x:(@) __ s:position!() "+" e:position!() __ y:@  { ast::Term::BinOp(x, Tag::new((path.clone(), (s, e)), ast::BinOp::Add), y) }
+            x:(@) __ s:position!() "-" e:position!() __ y:@ { ast::Term::BinOp(x, Tag::new((path.clone(), (s, e)), ast::BinOp::Sub), y) }
             --
-            x:(@) _ s:position!() "*" e:position!() _ y:@ { ast::Term::BinOp(x, Tag::new((path.clone(), (s, e)), ast::BinOp::Mul), y) }
-            x:(@) _ s:position!() "/" e:position!() _ y:@ { ast::Term::BinOp(x, Tag::new((path.clone(), (s, e)), ast::BinOp::Div), y) }
+            x:(@) __ s:position!() "*" e:position!() __ y:@ { ast::Term::BinOp(x, Tag::new((path.clone(), (s, e)), ast::BinOp::Mul), y) }
+            x:(@) __ s:position!() "/" e:position!() __ y:@ { ast::Term::BinOp(x, Tag::new((path.clone(), (s, e)), ast::BinOp::Div), y) }
             --
-            x:(@) _ s:position!() "&" e:position!() _ y:@ { ast::Term::BinOp(x, Tag::new((path.clone(), (s, e)), ast::BinOp::And), y) }
-            x:(@) _ s:position!() "|" e:position!() _ y:@ { ast::Term::BinOp(x, Tag::new((path.clone(), (s, e)), ast::BinOp::Or), y) }
+            x:(@) __ s:position!() "&" e:position!() __ y:@ { ast::Term::BinOp(x, Tag::new((path.clone(), (s, e)), ast::BinOp::And), y) }
+            x:(@) __ s:position!() "|" e:position!() __ y:@ { ast::Term::BinOp(x, Tag::new((path.clone(), (s, e)), ast::BinOp::Or), y) }
             --
             s:position!() "!" e:position!() _ x:term() { ast::Term::UnOp(Tag::new((path.clone(), (s, e)), ast::UnOp::Not), x) }
             s:position!() "-" e:position!() _ x:term() { ast::Term::UnOp(Tag::new((path.clone(), (s, e)), ast::UnOp::Neg), x) }
@@ -223,7 +223,7 @@ peg::parser! {
             "fn" spa() i:ident() _ "(" __ ts:lit_sep(",", <lit_tup(":", <pattern()>, <typ()>)>) __ ")" _ "{" __ t:term() __ "}" { let i_tag = i.tag.clone(); ast::Top::Fun(i, ts, Tag::new(i_tag, ast::Type::Unit), t) }
             "fn" spa() i:ident() _ "(" __ ts:lit_sep(",", <lit_tup(":", <ident()>, <typ()>)>) __ ")" _ "->" _ ty:typ() __ "{~" s:position!() c:$(quiet!{[^'~']*}) e:position!() "~}" { ast::Top::FFIFun(i, ts, ty, Tag::new((path.clone(), (s, e)), c.into())) }
             "fn" spa() i:ident() _ "(" __ ts:lit_sep(",", <lit_tup(":", <ident()>, <typ()>)>) __ ")" _ "{~" s:position!() c:$(quiet!{[^'~']*}) e:position!() "~}" { let i_tag = i.tag.clone(); ast::Top::FFIFun(i, ts, Tag::new(i_tag, ast::Type::Unit), Tag::new((path.clone(), (s, e)), c.into())) }
-            "alias" spa() i:ident() _ "=" _ t:typ() { ast::Top::Alias(i, t) }
+            "type" spa() i:ident() _ "=" _ t:typ() { ast::Top::Alias(i, t) }
         }
 
         rule rm<T>(x: rule<T>) -> T

@@ -1,0 +1,43 @@
+use std::io
+use std::conv
+
+type Point2 = (Int, Int)
+
+enum Color {
+    Rgb(Int, Int, Int),
+    Hsv(Int, Int, Int),
+}
+
+enum Message {
+    Quit,
+    Move { x: Int, y: Int },
+    Write(Str),
+    ChangeColor(Color),
+}
+
+fn main() {
+    let msg = Message::ChangeColor(Color::Hsv(0, 160, 255))
+    match msg {
+        Message::ChangeColor(Color::Rgb(r, g, b)) => io::println(
+            "Change the color to red" + conv::int_to_str(r) 
+            + ", green " + conv::int_to_str(g) 
+            + ", and blue " + conv::int_to_str(b)
+        ),
+        Message::ChangeColor(Color::Hsv(h, s, v)) => io::println(
+            "Change the color to hue " + conv::int_to_str(h) 
+            + ", saturation " + conv::int_to_str(s) 
+            +  ", and value " + conv::int_to_str(v)
+        ),
+        _ => (),
+    }
+}
+
+struct Point {
+    x: Int,
+    y: Int,
+    z: Int
+}
+
+fn origin() -> Point2 {
+    Point { x: 0, y: 0, z: 0 }
+}
