@@ -417,7 +417,7 @@ ast::Value::Int(i)
 Although this is using `unsafe`, since we translated the mini rust function correctly to the rust definition, this won't fail. 
 
 ### Pattern Exhaustiveness & Reachability
-When implementing pattern matching you need to ensure that a pattern is _exhaustive_ to keep your language sound. Further you may want to ensure that all branches of a match statement are _reachable_, tough this is not necessary but rather a design decision. The [`usefulness`-algorithm](https://doc.rust-lang.org/nightly/nightly-rustc/rustc_mir_build/thir/pattern/usefulness/index.html) is used test a list of patterns (can be a list of an single element, when using `let` or function argument patterns) on exhaustiveness and reachability.
+When implementing pattern matching you need to ensure that a pattern is _exhaustive_ to keep your language sound. Further you may want to ensure that all branches of a match statement are _reachable_, tough this is not necessary but rather a design decision. The [`usefulness`-algorithm](https://doc.rust-lang.org/nightly/nightly-rustc/rustc_mir_build/thir/pattern/usefulness/index.html) is used to test a list of patterns (can be a list of an single element, when using `let` or function argument patterns) on exhaustiveness and reachability.
 
 First patterns are _deconstructed_ to a `DeconstructedPattern` which consists of a `PatternConstructor` and a list of _deconstructed_ sub-patterns given by the following **pseudo** code:
 
@@ -444,10 +444,10 @@ enum Pattern {
 
     Unit,
     Tuple([Pattern]),
-    Record({ Ident: Pattern? })
+    Record([Ident: Pattern])
 }
 
-// used in the algorithm
+// used in the algorithm to express what the pattern does cover
 enum PatternConstructor {
     // covers everything
     Wildcard,
@@ -479,7 +479,7 @@ fn deconstruct(pattern: Pattern) -> DeconstructedPattern {
         // variables and wildcards cover everything and have no sub patterns
         Variable(_) | Wildcard => DeconstructedPattern( Wildcard, [] ),
         
-        Constant(c) => match type_of(c) {
+        Constant(c) => match c type {
             Unit => DeconstructedPattern( Single, [] ),
 
             // booleans are translated to int ranges for simplicity
@@ -511,17 +511,28 @@ fn deconstruct(pattern: Pattern) -> DeconstructedPattern {
             )
         }
 
+        // single constructor
         Unit => DeconstructedPattern( Single, [] ),
         
+        // again only one way to instantiate a tuple but has sub-patterns
         Tuple(sub_patterns) => { 
             DeconstructedPattern( Single, 
                 [deconstruct(sub_pattern) for sub_pattern in sub_patterns] 
             )
         },
 
+        // equivalent to tuples
+        Record(sub_patterns) => { 
+            DeconstructedPattern( Single, 
+                [deconstruct(sub_pattern) for _, sub_pattern in sub_patterns] 
+            )
+        },
     }
 }
 ```
+
+We now have translated our input, a list of patterns, to a list of deconstructed patterns.
+Next we need to implement to helper functions for our final `usefulness`-algorithm.
 
 
 
