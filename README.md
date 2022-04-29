@@ -507,7 +507,7 @@ fn deconstruct(pattern: Pattern) -> DeconstructedPattern {
         // we need to recursively unpack nested `Or` patterns
         Or(sub_patterns) => {
             DeconstructedPattern( Or, 
-                flattened([deconstruct(sub_pattern).sub_patterns for sub_pattern in sub_patterns]) 
+                flatten([deconstruct(sub_pattern).sub_patterns for sub_pattern in sub_patterns]) 
             )
         }
 
