@@ -1,16 +1,15 @@
-struct Struct {
-    t: (Int, Int)
-}
-enum Enum {
-    Tup((Int, Int)),
-    Rec(Struct),
-    Unit
+struct S{ b: Bool }
+
+fn f(s: S) -> Bool {
+    let f = false
+
+    let x = s.b
+    let or_false = |x: Bool| {
+        x | f
+    }
+    or_false(x)
 }
 
-fn extract(e: Enum) -> Int {
-    match e {
-        Enum::Tup((x, 42)) | Enum::Tup((_, x)) => x,
-        Enum::Rec(Struct { t: (x, y) }) => x + y,
-        _ => 42
-    }
+fn main() {
+    f(S{ b: true });
 }

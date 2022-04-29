@@ -121,7 +121,7 @@ impl FFI {
     }
 }
 
-impl Drop for FFI {
+/* impl Drop for FFI {
     fn drop(&mut self) {
         let tmp = std::env::temp_dir().to_str().unwrap().to_string();
         let code_path = format!("{}/{}.rs", &tmp, self.id);
@@ -135,7 +135,7 @@ impl Drop for FFI {
             fs::remove_file(lib).unwrap()
         }
     }
-}
+} */
 
 #[macro_export]
 macro_rules! call1 {

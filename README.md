@@ -50,7 +50,6 @@ fn main() {
 _https://doc.rust-lang.org/book/ch18-03-pattern-syntax.html : listing 18-16, slightly modified_ 
 
 ## Getting Started
-Cargo & rustc should be installed. 
 
 ### Installation
 ```shell
@@ -133,7 +132,7 @@ fn origin_dim3() -> Point {
 ### Terms
 
 #### Top Level
-At the top level only few terms are allowed. The order in which top level terms are written _does not_ matter, while inside a top level function the language is purely functional and order does matter.
+At the top level only few terms are allowed. The order in which top level terms are written _does not_ matter, while inside a top level function the language is purely functional and order does matter. Besides that name duplications (in both types and functions) are not allowed.
 
 ##### Type Definition
 Type definitions are only allowed at top level.
@@ -151,7 +150,8 @@ enum Enum {
 ```
 
 ##### Function Definition
-Top level functions can recurse while inner functions (functions definition inside function) can't. The `main` function is used as entry point into the program and cannot have arguments or return anything other than `()`.
+Top level functions can recurse while inner functions can't. The `main` function is used as entry point into the program and cannot have arguments or return anything other than `()`.
+
 
 ```rust
 use std::io
@@ -171,6 +171,7 @@ fn fib(n: Int) -> Int {
 
 ##### Foreign Function Definition
 These functions contain rust code inside their body. This code will be compiled and linked at runtime and can be called from inside the interpreter. The FFI is completely type safe and currently only supports 2 argument functions with base types, though a prototype for ADT support exists, but more work would need to be done. This _should_ be the only place where runtime errors can occur. Every function does return a dynamic result, so you can use the `?` operator.
+
 ```rust
 fn arg(idx: Int) -> Str {~
     use std::env;
@@ -185,8 +186,9 @@ fn args_len() -> Int {~
 ~}
 ```
 
-#### Inside functions
+#### Inside Functions
 Inside functions the language is purely functional, although it might not always seems like it is. Consider this example where the `let` binds a new variable `x` in the continuation term `x + 42 - 42`. When missing a continuation it becomes `()`. The `in` keyword was omitted to match rust's syntax.
+
 ```rust
 let x = 42
 x + 42 - 42
@@ -204,6 +206,7 @@ let computed = {
 
 ##### Sequencing
 A sequence _ignores_ the type of the left term and continues with the right term. In this example the `Int` value produced by the match term is ignored and the sequence has type `Str`.
+
 ```rust
 match 42 {
     0 => 1
@@ -211,13 +214,22 @@ match 42 {
     _ => 42
 };
 "Hello World!"
-``` 
+```
+An sequence with no right part returns `()`.
+
+```rust
+fn main() -> () {
+    "Hello World!";
+}
+```
 
 ##### Anonymous & Nested Functions
 ```rust
 use std::assert;
 
 fn compose(f: Int -> Int, g: Int -> Int) -> Int -> Int {
+    // could not recurse, the function only "exists" in 
+    // the continuation of the function definition
     fn composed(i: Int) {
          f(g(i))
     }
@@ -231,6 +243,7 @@ fn main() {
 
 ##### Projections
 You can project to a tuple (-struct, -variant) by using constant `Int`'s and to a record (-struct, -variant) by using constant `Str`'s
+
 ```rust
 let t = (42, 42)
 let x: Int = t.0
@@ -241,7 +254,8 @@ let x = r.x
 
 ##### Pattern Matching
 There are several patterns to match on any value, including ADT's. You can use a binder as pattern, or if you don't care about the actual value, a wildcard pattern, which acts the same as the binder expect it does not introduce a new variable. You can also use any constant value as pattern, e.g. `42` when matching on `Int`. You can match on a tuple (-struct, -variant) or record (-struct, -variant) as well. Finally there is the or pattern `|` in which case one of the branch patterns can match to match the or pattern. All branches of one or pattern must introduce exactly
-the same variables. You can also use patterns in `let` bindings and function arguments.
+the same variables.
+
 ```rust
 struct Struct {
     t: (Int, Int)
@@ -255,25 +269,33 @@ enum Enum {
 
 fn match_pattern(e: Enum) -> Int {
     match e {
+        // uses variant, tuple, const, wildcard, binder and or pattern
         Enum::Tup((x, 42)) | Enum::Tup((_, x)) => x,
+        // uses variant, struct, record, tuple, binder pattern
         Enum::Rec(Struct { t: (x, y) }) => x + y,
-        _ => 42
+        // uses unit pattern
+        Enum::Unit => 42
     }
 }
+```
 
+You can also use patterns in `let` bindings and function arguments.
+
+```rust
 fn arg_pattern((x, y): (Int, Int)) -> Int {
     x + y
 }
 
 fn let_pattern() {
     let { x, y } = { x: 42, y: 42 }
-    let _ = -42
+    let _ = 42
 }
-
 ```
+
 ##### Operators
 
 ###### Int
+
 ```rust
 let x = 42
 let y = 42
@@ -289,6 +311,7 @@ let lte: Bool = x <=y
 ```
 
 ###### Bool
+
 ```rust
 let t = true
 let f = false
@@ -308,16 +331,99 @@ let eq: Bool = x == y
 let neq: Bool = x != y
 ```
 
+## Implementation 
 
-## project structure
+### Debruijn Indices
+All binders, on the term as well as on the type level are translated to debruijn indices to avoid name clashing. Consider the following example:
+```rust
+struct S{ b: Bool }
+
+fn f(s: S) -> Bool {
+    let f = false
+
+    let x = s.b
+    let or_false = |x: Bool| {
+        x | f
+    }
+    or_false(x)
+}
+```
+
+All variables will be translated to an integers that denote the number of binders between the variable and it's corresponding binder, separately on the type and term level. In this case this translates to:
+
+```rust
+// names do not matter anymore!
+struct S { b: Bool }
+
+// there are 0 other definitions between S and the occurrence as argument
+fn f(s: Env<0>) -> Bool {
+    let f = false
+
+    let x = s.b
+    // x is shadowed, but the most inner x is linked
+    let or_false = |x: Bool| {
+        // f will be translated to the index 2
+        // because two variables (both names x) are bound in between
+        Ctx<0> | Ctx<2>
+    }
+    
+    Ctx<0>(Ctx<1>)
+}
+```
+where `Env` is a vector that holds the types corresponding type at position of the debruijn index and `Ctx` the values respectively.
+
+### Foreign Function Interface
+All FFI functions will be compiled during type checking. Only if compilation of the rust code succeeds the type checker will succeed. Type safety is guaranteed because the function definitions itself are written in mini rust and then correctly translated to the corresponding rust function definitions. After successful compiling the rust library is dynamically linked to the interpreter as [`dylib`](https://doc.rust-lang.org/reference/linkage.html). Using the `libloading` crate the `dylib` functions can be called at runtime. Consider this example which converts a mini rust str to an integer using rust:
+```rust
+fn str_to_int(s: Str) -> Int {~
+    s.parse::<i64>()?
+~}
+
+fn main() {
+    str_to_int("42");
+}
+```
+
+it will be translated to the following rust code:
+
+```rust
+// no mangle will keep the function name as is
+#[no_mangle]
+// returns a dynamic error, so you can use the `?` error monad most of the time
+fn str_to_int(s: String) -> std::result::Result<i64, Box<dyn std::error::Error>> {
+    // always wrap into `Ok` to hide the result wrapping
+    Ok({
+        s.parse::<i64>()?
+    })
+}
+
+```
+
+and will later be called like this inside the interpreter 
+
+```rust
+type DynResult<T> = std::result::Result<T, Box<dyn std::error::Error>>
+
+let i: i64 = unsafe {
+    let fun: Fn(String) = lib.get::<unsafe fn(String) -> DynResult<i64>>("str_to_int")?;
+    fun("42")?
+}
+
+ast::Value::Int(i)
+```
+
+Although this is using `unsafe`, since we translated the mini rust function correctly to the rust definition, this won't fail. 
+
+## Project Structure
 - `ast`
     - `lib.rs`: abstract syntax tree
     - `ctx.rs`: debruijn like context
     - `tag.rs`: syntax tree annotations
     - `err.rs`: pretty error messages
+    - `fmt.rs`: pretty print types & values
 - `parse`
     - `lib.rs`: file or string parsing
-    - `grammar.rs`: actual peg
+    - `grammar.rs`: actual grammar that is parsed
 - `ir`
     - `lib.rs`: transform to immediate representation
     - `debruijn.rs`: debruijn indices
