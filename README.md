@@ -132,7 +132,7 @@ fn origin_dim3() -> Point {
 ### Terms
 
 #### Top Level
-At the top level only few terms are allowed. The order in which top level terms are written _does not_ matter, while inside a top level function the language is purely functional and order does matter. Besides that name duplications (in both types and functions) are not allowed.
+At the top level only few terms are allowed. Further name duplications (in between both types and functions) are not allowed.
 
 ##### Type Definition
 Type definitions are only allowed at top level.
@@ -195,7 +195,8 @@ x + 42 - 42
 ```
 
 ##### Let Bindings
-Let bindings supports pattern syntax and optional type annotations, though these are just checked against the type the type checker expects.
+Let bindings support pattern syntax and optional type annotations.
+
 ```rust
 let (a, b): (Int, Int) = (42, 42)
 let (x, y) = (42, 42)
@@ -205,7 +206,7 @@ let z = {
 ```
 
 ##### Sequencing
-A sequence _ignores_ the type of the left term and continues with the right term. In this example the `Int` value produced by the match term is ignored and the sequence has type `Str`.
+A sequence _ignores_ the result of the left term and continues with the right term. In this example the `Int` value produced by the match term is ignored and the sequence has type `Str`.
 
 ```rust
 match 42 {
@@ -242,7 +243,7 @@ fn main() {
 ```
 
 ##### Projections
-You can project to a tuple (-struct, -variant) by using constant `Int`s and to a record (-struct, -variant) by using constant `Str`s
+You can project out of a tuple (-struct, -variant) by using constant `Int`s and to a record (-struct, -variant) by using constant `Str`s
 
 ```rust
 let t = (42, 42)
@@ -253,7 +254,7 @@ let x = r.x
 ```
 
 ##### Pattern Matching
-There are several patterns to match on any value, including ADTs. You can use a binder as pattern, or if you don't care about the actual value, a wildcard pattern, which acts the same as the binder expect it does not introduce a new variable. You can also use any constant value as pattern, e.g. `42` when matching on `Int`. You can match on a tuple (-struct, -variant) or record (-struct, -variant) as well. Finally there is the or pattern `|` in which case one of the branch patterns can match to match the or pattern. All branches of one or pattern must introduce exactly
+There are several patterns to match on any value, including ADTs. "You can bind a variable as a pattern", or if you don't care about the actual value, a wildcard pattern, which acts the same as the variable except it does not introduce a new variable. You can also use any constant value as pattern, e.g. `42` when matching on `Int`. You can match on a tuple (-struct, -variant) or record (-struct, -variant) as well. Finally there is the or-pattern `|` in which case one of the branch patterns can match to match the or-pattern itself. All branches of one or-pattern must introduce exactly
 the same variables.
 
 ```rust
@@ -321,11 +322,11 @@ let or: Bool = t | f
 ```
 
 ###### Equality
-Equality works on any type including ADTs.
+Equality works on any type including ADTs and performs structural equality, therefore the type name and it's elements / fields must be equal.
 
 ```rust
 let x = (42, 42)
-let y = (42 41)
+let y = (42, 41)
 
 let eq: Bool = x == y
 let neq: Bool = x != y
@@ -408,7 +409,7 @@ and will later be called from mini rust's `main` function like this:
 type DynResult<T> = std::result::Result<T, Box<dyn std::error::Error>>
 
 let i: i64 = unsafe {
-    let fun: Fn(String) = lib.get::<unsafe fn(String) -> DynResult<i64>>("str_to_int")?;
+    let fun = lib.get::<unsafe fn(String) -> DynResult<i64>>("str_to_int")?;
     fun("42")?
 }
 
@@ -424,13 +425,13 @@ We will assume that the pattern were already type checked. Because of that we ca
 ```rust
 // wouldn't type check 
 match (42, (42, 42)) {
-    (42, (42, "42"))
-    (42, (42, 42)) => 42
+    (42, (42, "42")) => 42,
+    (42, (42, 42)) => 42,
     _ => -42
 }
 ```
 
-When implementing pattern matching we want to ensure that a pattern is _exhaustive_, that is, all possible patterns are covered by a pattern. Further we want that all patterns of a match term are _reachable_, that is, they can be reached by _any_ of all possible input's with respect to the patterns before it.
+When implementing pattern matching we want to ensure that a list of patterns is _exhaustive_, that is, all possible values are covered by at least one pattern. Further we want that all patterns of a match term are _reachable_, that is, they can be reached by _any_ of all possible input's with respect to the patterns before it.
 
 The [`usefulness`-algorithm](https://doc.rust-lang.org/nightly/nightly-rustc/rustc_mir_build/thir/pattern/usefulness/index.html) is used to test a list of patterns on exhaustiveness and reachability. A list of an single element can be used, e.g. when checking `let` or function argument patterns. The Algorithm takes a (possibly empty) list of patterns `ps` and one pattern `q` to test if `q` is useful with respect to the patterns `ps` before it. 
 
@@ -687,8 +688,7 @@ fn split(
 }
 ```
 
-Finally we need to _specialize_ a given list of patterns. The `specialize` function takes a matrix (denoted `[[T]]`) of deconstructed patterns `ms` and a deconstructed pattern `q` as input and returns a list of constructors that are _only_ covered by `q` and not by any of the `p` in first entry for each list `ps` in  `ms`. If `q` matches a pattern `p` in `ms` we recurse by checking if the sub-patterns are covered:
-
+Finally we need to _specialize_ a deconstructed pattern in respect to a list of deconstructed patterns. The `specialize_vector` function takes a list of deconstructed patterns `ps` and a deconstructed pattern `q` and returns a list of constructors that are _only_ covered by `q` and not by any heads, i.e. the first element in the vector, in `ps`. Equivalently `specialize_matrix` performs `specialize_vector` for all `ps` inside an matrix `ms`, iff the head of the `ps` is covered by `q`, because otherwise `p` cannot cover anything `q` covers anyways.
 ```rust
 
 // specialize one pattern with respect to another
