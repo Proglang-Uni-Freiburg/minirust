@@ -487,7 +487,7 @@ fn deconstruct(pattern: Pattern) -> DeconstructedPattern {
         // variables and wildcards cover everything and have no sub patterns
         Variable | Wildcard => DeconstructedPattern( Wildcard, [] ),
         
-        Constant(constant) => match type constant {
+        Constant(constant) => match constant type {
             Unit => DeconstructedPattern( Single, [] ),
 
             // booleans are translated to int ranges for simplicity
