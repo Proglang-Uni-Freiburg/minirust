@@ -449,7 +449,7 @@ enum Pattern {
 
     Unit,
     Tuple([Pattern]),
-    Record([Ident: Pattern])
+    Record({Ident: Pattern})
 }
 
 // used in the algorithm to express what the pattern does cover
@@ -500,7 +500,7 @@ fn deconstruct(pattern: Pattern) -> DeconstructedPattern {
             Str => DeconstructedPattern( NonExhaustive, [] ),
         }
 
-        // only one way to instantiate a struct
+        // only one way to instantiate a struct.
         // by design it only can have a `Unit`, `Tup` or `Rec` sub-pattern, 
         // so we take their sub-patterns as the structs sub-pattern.
         Struct(sub_pattern) => {
@@ -532,7 +532,7 @@ fn deconstruct(pattern: Pattern) -> DeconstructedPattern {
         // equivalent to tuples
         Record(sub_patterns) => { 
             DeconstructedPattern( Single, 
-                [deconstruct(sub_pattern) for _, sub_pattern in sub_patterns] 
+                [deconstruct(sub_pattern) for (_, sub_pattern) in sub_patterns] 
             )
         },
     }
@@ -547,14 +547,14 @@ First we implement two small helper functions `all_constructors` for listing all
 ```rust
 // returns all possible constructors for a given pattern by the type it tries to match
 fn all_constructors(pattern: DeconstructedPattern) -> [PatternConstructor] {
-    match type pattern {
+    match pattern type {
         Unit | Tup | Rec | Struct => [Single],
         // can only be 0 or 1
         Bool => [Range(0, 1)],
         Int => [Range(i64::MAX, i64::MIN)],
         Str => [NonExhaustive],
         // enum has all variants as possible constructor
-        Enum(variants) => [Variant(variant) for  variant in variants]
+        Enum(variants) => [Variant(variant) for variant in variants]
     }
 }
 
@@ -577,6 +577,8 @@ fn covered_by(pattern: DeconstructedPattern, other: DeconstructedPattern) {
 
         // non-exhaustive patterns cannot be covered
         (NonExhaustive, _) => false
+
+        // other patterns cannot be reached by how the algorithm is constructed later on
     }
 }
 ```
@@ -584,7 +586,10 @@ fn covered_by(pattern: DeconstructedPattern, other: DeconstructedPattern) {
 Second we want to _split_ a deconstructed pattern `q` with respect to patterns `ps`. The idea of `constructor splitting` is to group together constructors that behave the same way and list all constructors implied by `q`. For example the wildcard deconstructed pattern implies to cover _all_ the constructors of a given pattern and the ranges `(0, 0)` and `(0, 1)` can be grouped to be one range `(0, 1)`. Consider the following pseudo code:
 
 ```rust
-fn split(pattern: DeconstructedPattern, others: [DeconstructedPattern]) -> [DeconstructedPattern] {
+fn split(
+    pattern: DeconstructedPattern, 
+    others: [DeconstructedPattern]
+) -> [DeconstructedPattern] {
     match pattern {
         Range(lo, hi) => {
             others
@@ -602,10 +607,10 @@ fn split(pattern: DeconstructedPattern, others: [DeconstructedPattern]) -> [Deco
             // get all possible constructors
             let all: [PatternConstructor] = all_constructors(pattern)
                 // recursively split all the possible constructors for the wildcard 
-                // with respect to the others and merge them 
+                // with respect to the others and merge them.
                 // recursion will indefinitely stop because split itself
                 // does not returns wildcards
-                .flat_map(|constructor| constructor.split(others));
+                .flat_map(|constructor| constructor.split(others))
 
             let others: [PatternConstructor] = others
                     // remove all wildcards from `others`
@@ -613,7 +618,7 @@ fn split(pattern: DeconstructedPattern, others: [DeconstructedPattern]) -> [Deco
                     .filter(|other| !(other is Wildcard))
 
             let missing: [PatternConstructor] = all
-                // is `others` covering all the possibilities?
+                // check if `others` is covering all the possible constructors
                 .filter(|constructor| 
                     !others
                         // keep the `constructor` if it is not covered by any
@@ -622,32 +627,172 @@ fn split(pattern: DeconstructedPattern, others: [DeconstructedPattern]) -> [Deco
                         .any(|other| covered_by(constructor, other))
                 )
             
-            // if condition is met we have some uncovered constructors
-            if not_covered_by_others.is_not_empty() {
-                // if not all constructors are missing
-                // we return which of them are actually missing
-                if others.is_not_empty() {
-                    [Missing(missing)]
-                }
-                // otherwise we return all constructors are missing
-                // which is equivalent to return wildcard
-                else {
-                    [Wildcard]
-                }
+            // if there are missing constructors we return them as missing
+            if missing.is_not_empty() {
+                // since there are missing constructors 
+                // we can ignore those present.
+                // `Missing` can only be covered by wildcard
+                [Missing(missing)]
             } 
             // if all constructors are covered we return them all
             else {
                 all
             }
-        }
+        },
         // nothing to split
         _ => [pattern]
     }
 }
 ```
 
-Finally we need to _specialize_ 
+Finally we need to _specialize_ a given list of patterns. The `specialize` function takes a matrix (denoted `[[T]]`) of deconstructed patterns `ms` and a deconstructed pattern `q` as input and returns a list of constructors that are _only_ covered by `q` and not by any of the `p` in first entry for each list `ps` in  `ms`. If `q` matches a pattern `p` in `ms` we recurse by checking if the sub-patterns are covered:
 
+```rust
+
+// specialize one pattern with respect to another
+fn specialize_constructor(
+    pattern: DeconstructedPattern, 
+    other: DeconstructedPattern
+) -> [DeconstructedPattern] {
+    match (pattern.constructor, other.constructor) {
+        // a wildcard acts as wildcard for all sub patterns as well
+        (Wildcard, _) => match other.constructor {
+            Single => match pattern type {
+                // give a wildcard for all the 
+                // (struct-) tuple elements / (struct-) record fields
+                Tuple(els) | Record(els) | Struct(els) => [Wildcard for _ in els],
+                // all single patterns are matched here
+            },
+            Variant(variant) => match pattern type {
+                // wildcard for all the tuple/record -variant elements/fields
+                Enum(variants) => [Wildcard for variants.find(variant).els]
+                // other cases cannot be reached, only enums have variants
+            }
+            // others do no need to be recursed
+            _ => []
+        }
+        // otherwise we need to cover all the sub patterns
+        _ => pattern.sub_patterns
+    }
+}
+
+// specialized head of one row with respect to another pattern
+fn specialize_vector(
+    vector: [DeconstructedPattern],
+    other: DeconstructedPattern,
+) -> [DeconstructedPattern] {
+    // specialize one row by specializing the head pattern (at index 0) of the
+    // vector and removing it from the row
+    let head = vector.pop(0)
+    let new = specialize_constructor(head, other)
+    // add all other patterns untouched
+    new + vector
+}
+
+// specialized all heads of all rows with respect to another pattern
+fn specialize_matrix(
+    matrix: [[DeconstructedPattern]],
+    other: DeconstructedPattern,
+) -> [DeconstructedPattern] {
+    let new = []
+    for vector in matrix {
+        if is_covered(other, row.head) {
+            mat += [specialize_vector(other, vector)]
+        }
+    }
+    new
+}
+```
+
+In the end we can compute `usefulness` for a given list of patterns `ps` is respect to a list of lists of patterns `ms` by defining the `usefulness`-algorithm:
+
+```rust
+fn is_useful(
+    matrix: [[DeconstructedPattern]], 
+    patterns: [DeconstructedPattern]
+) -> bool {
+    // base case
+    // if there is no pattern left in pattern
+    if patterns.is_empty() {
+        // if matrix is empty the list of patterns was useful
+        return matrix.is_empty()
+    }
+
+    // we recursively expand all `Or` patterns
+    // at the heads of all rows in the matrix. 
+    let matrix = matrix.flat_map(|vector| match vector {
+        // code for expand omitted, we just lift 
+        // all `sub_patterns` to being rows
+        [Or, ..] => expand(vector)
+        _ => [vector]
+    })
+
+    let reachable = false
+
+    if patterns.head is Or {
+        let all_branches_reachable = false
+
+        for branch in expand(patterns) {
+            // all branches must be useful inside or pattern with respect to 
+            // branches before them
+            all_branches_reachable &= is_useful(matrix, branch)
+            
+            // an or branch acts as yet another vector
+            matrix += branch
+        }
+
+        reachable |= all_branches_reachable
+    } else {
+        // go through all the split constructors of head in respect to
+        // all heads in patterns before
+        for constructor in split(patterns.head, matrix.heads) {
+            // its reachable iff sub-patterns are reachable in respect to 
+            // all sub-patterns at that depth before
+            reachable |= is_useful(
+                specialize_matrix(matrix, constructor),
+                specialize_vector(patterns, constructor)
+            )
+
+        }
+    }
+
+    return reachable
+}
+```
+
+And to wrap it all up we can use this to define the `exhaustiveness`-algorithm for a list of patterns by checking if the wildcard is useful in respect to all patterns  
+
+```rust
+fn is_exhaustive(patterns: [Pattern]) -> .. {
+    let matrix: [[DeconstructedPattern]] = []
+
+    // deconstruct all patterns
+    let deconstructed: [DeconstructedPattern] = patterns
+        .map(|pattern| deconstruct(pattern))
+    
+    // check all patterns for reachability 
+    let pattern_reachable: {DeconstructedPattern: Bool} = deconstructed
+        .map(|pattern| {
+            pattern: is_useful(matrix, [pattern])
+        })
+    
+    // check if wildcard is useful, if so 
+    // the list of patterns is non-exhaustive.
+    // needs to be done after reachability checking
+    // so that all patterns are in the matrix already
+    if is_useful(matrix, [ DeconstructedPattern ( Wildcard, [] )]) {
+        // handle non-exhaustiveness
+    }
+
+    // check if there are unreachable patterns / `Or`-branches
+    for (pattern, reachable) in pattern_reachable {
+        if !reachable {
+            // handle non-reachability
+        }
+    }
+}
+```
+Currently Witnesses for non-exhaustiveness are not supported but should be fairly easy to implement.
 
 ## Project Structure
 - `ast`
