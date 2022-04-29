@@ -1,7 +1,7 @@
 # Mini Rust
 
 ## About
-An interpreter for a subset of the rust language. The main focus of this project was to implement algebraic data types (ADT's) with pattern matching.
+An interpreter for a subset of the rust language. The main focus of this project was to implement algebraic data types (ADTs) with pattern matching.
 
 ### Language Features
 - statically typed
@@ -242,7 +242,7 @@ fn main() {
 ```
 
 ##### Projections
-You can project to a tuple (-struct, -variant) by using constant `Int`'s and to a record (-struct, -variant) by using constant `Str`'s
+You can project to a tuple (-struct, -variant) by using constant `Int`s and to a record (-struct, -variant) by using constant `Str`s
 
 ```rust
 let t = (42, 42)
@@ -253,7 +253,7 @@ let x = r.x
 ```
 
 ##### Pattern Matching
-There are several patterns to match on any value, including ADT's. You can use a binder as pattern, or if you don't care about the actual value, a wildcard pattern, which acts the same as the binder expect it does not introduce a new variable. You can also use any constant value as pattern, e.g. `42` when matching on `Int`. You can match on a tuple (-struct, -variant) or record (-struct, -variant) as well. Finally there is the or pattern `|` in which case one of the branch patterns can match to match the or pattern. All branches of one or pattern must introduce exactly
+There are several patterns to match on any value, including ADTs. You can use a binder as pattern, or if you don't care about the actual value, a wildcard pattern, which acts the same as the binder expect it does not introduce a new variable. You can also use any constant value as pattern, e.g. `42` when matching on `Int`. You can match on a tuple (-struct, -variant) or record (-struct, -variant) as well. Finally there is the or pattern `|` in which case one of the branch patterns can match to match the or pattern. All branches of one or pattern must introduce exactly
 the same variables.
 
 ```rust
@@ -321,7 +321,7 @@ let or: Bool = t | f
 ```
 
 ###### Equality
-Equality works on any type including ADT's.
+Equality works on any type including ADTs.
 
 ```rust
 let x = (42, 42)
@@ -387,10 +387,12 @@ fn main() {
 it will be translated to the following rust code:
 
 ```rust
+type DynResult<T> = std::result::Result<T, Box<dyn std::error::Error>>
+
 // no mangle will keep the function name as is
 #[no_mangle]
 // returns a dynamic error, so you can use the `?` error monad most of the time
-fn str_to_int(s: String) -> std::result::Result<i64, Box<dyn std::error::Error>> {
+fn str_to_int(s: String) -> DynResult<i64> {
     // always wrap into `Ok` to hide the result wrapping
     Ok({
         s.parse::<i64>()?
@@ -399,7 +401,7 @@ fn str_to_int(s: String) -> std::result::Result<i64, Box<dyn std::error::Error>>
 
 ```
 
-and will later be called like this inside the interpreter 
+and will later be called from `main`inside the interpreter like this:
 
 ```rust
 type DynResult<T> = std::result::Result<T, Box<dyn std::error::Error>>
@@ -414,15 +416,111 @@ ast::Value::Int(i)
 
 Although this is using `unsafe`, since we translated the mini rust function correctly to the rust definition, this won't fail. 
 
+### Pattern Exhaustiveness & Reachability
+When implementing pattern matching you need to ensure that a pattern is _exhaustive_ to keep your language sound. Further you may want to ensure that all branches of a match statement are _reachable_, tough this is not necessary but rather a design decision. The [`usefulness`-algorithm](https://doc.rust-lang.org/nightly/nightly-rustc/rustc_mir_build/thir/pattern/usefulness/index.html) is used test a list of patterns (can be a list of an single element, when using `let` or function argument patterns) on exhaustiveness and reachability.
+
+First patterns are _deconstructed_ to a `DeconstructedPattern` which consists of a `PatternConstructor` and a list of _deconstructed_ sub-patterns given by the following **pseudo** code:
+
+```rust
+// used in the actual language
+enum Pattern {
+    Variable(String),
+    Wildcard,
+
+    Constant(Constant),
+
+    // Point { x: Int, y: Int }
+    // ^^^^^ ^^^^^^^^^^^^^^^^^^
+    // name      sub-pattern
+    Struct(String, Pattern),
+
+    // Enum::Variant (x, y)
+    // ^^^^  ^^^^^^^ ^^^^^^
+    // name  variant sub-p
+    Variant(Strong, String, Pattern),
+
+    // contains list of branches
+    Or([Pattern]),
+
+    Unit,
+    Tuple([Pattern]),
+    Record({ Ident: Pattern? })
+}
+
+// used in the algorithm
+enum PatternConstructor {
+    // covers everything
+    Wildcard,
+
+    // has one single way to be instantiated
+    Single,
+
+    // covers one variant of a enum
+    Variant(String),
+
+    // covers a integer range
+    Range(Int, Int),
+
+    // cannot be covered
+    NonExhaustive
+}
+
+struct DeconstructedPattern {
+    constructor: PatternConstructor,
+    sub_patterns: [DeconstructedPattern]
+}
+```
+
+The destruction is defined as follows:
+
+```rust
+fn deconstruct(pattern: Pattern) -> DeconstructedPattern { 
+    match pattern {
+        // variables and wildcards cover everything and have no sub patterns
+        Variable(_) | Wildcard => DeconstructedPattern( Wildcard, [] ),
+        
+        Constant(c) => match type_of(c) {
+            Unit => DeconstructedPattern( Single, [] ),
+
+            // booleans are translated to int ranges for simplicity
+            True => DeconstructedPattern( Range(0, 0), [] ),
+            False => DeconstructedPattern( Range(1, 1), [] ),
+
+            Int(i) => DeconstructedPattern( Range(i, i), [] ),
+
+            // Str cannot be exhausted (too many possibilities)
+            Str => DeconstructedPattern( NonExhaustive, [] ),
+        }
+
+        // only one way to instantiate a struct
+        // by design it only can have a `Unit`, `Tup` or `Rec` sub-pattern, so we take their sub-patterns as
+        // the structs sub-pattern.
+        Struct(_, _, sub_pattern) => DeconstructedPattern( Single, deconstruct(sub_pattern).sub_patterns )
+
+        // equivalent to structs, but only covers one variant of the enum
+        Variant(_, _, name, sub_pattern) => DeconstructedPattern( Variant(name), deconstruct(sub_pattern).sub_patterns )
+
+        // we need to recursively unpack nested `Or` patterns
+        Or(sub_patterns) => DeconstructedPattern( Or, flattened([deconstruct(sub_pattern).sub_patterns for sub_pattern in sub_patterns]) )
+
+        Unit => DeconstructedPattern( Single, [] ),
+        
+        Tuple(sub_patterns) =>  DeconstructedPattern( Single, [deconstruct(sub_pattern) for sub_pattern in sub_patterns] ),
+    }
+}
+```
+
+
+
 ## Project Structure
 - `ast`
     - `lib.rs`: abstract syntax tree
     - `ctx.rs`: debruijn like context
-    - `tag.rs`: syntax tree annotations
+    - `tag.rs`: syntax tree annotations to preserve code file positions
     - `err.rs`: pretty error messages
     - `fmt.rs`: pretty print types & values
 - `parse`
-    - `lib.rs`: file or string parsing
+    - `lib.rs`: parses a file or string
     - `grammar.rs`: actual grammar that is parsed
 - `ir`
     - `lib.rs`: transform to immediate representation
@@ -435,13 +533,13 @@ Although this is using `unsafe`, since we translated the mini rust function corr
     - `proj.rs`: handles projections on tuple / record (variants)
     - `useful.rs`: match exhaustiveness & pattern reachability
 - `ffi`
-    - `translate.rs`: translates to rust code
+    - `translate.rs`: translates mini rust to rust code
     - `lib.rs`: dynamically links rust code & provide type safe call interface
 - `eval`
-    - `lib.rs`: interpreter
+    - `lib.rs`: interpreter for mini rust
 - `cli`
     - `main.rs`: command line interface binary
 - `tests`
-    - `macros`: contains compile time interpreter macros
+    - `macros`: contains compile time mini rust interpreter macros
     - `src`: actual tests
     - `util`: language util functions 
