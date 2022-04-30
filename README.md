@@ -243,14 +243,14 @@ fn main() {
 ```
 
 ##### Projections
-You can project out of a tuple (-struct, -variant) by using constant `Int`s and to a record (-struct, -variant) by using constant `Str`s
+You can project out of a tuple (-struct, -variant) by using constant `Int`s and out of a record (-struct, -variant) by using the corresponding label.
 
 ```rust
 let t = (42, 42)
 let x: Int = t.0
 
 let r = { x: 42, y: 42 }
-let x = r.x
+let x: Int = r.x
 ```
 
 ##### Pattern Matching
@@ -322,20 +322,32 @@ let or: Bool = t | f
 ```
 
 ###### Equality
-Equality works on any type including ADTs and performs structural equality, therefore the type name and it's elements / fields must be equal.
+Equality works on any type including ADTs and performs structural equality, therefore the type path (includes name and file path to ensure uniqueness) and it's elements / field names & values must be equal.
 
 ```rust
-let x = (42, 42)
-let y = (42, 41)
+use other::S;
 
-let eq: Bool = x == y
-let neq: Bool = x != y
+struct S {
+    x: 42
+}
+
+fn eq() {
+    let x = S { x: 42 }
+    let y = S { x: 42 }
+    let o = other::S { x: 42 }
+
+    let eq: Bool = x == y   // true
+    let eq2: Bool = x == o  // false
+
+    let neq: Bool = x != y  // false
+    let neq2: Bool = x != o // true
+}
 ```
 
 ## Implementation 
 
 ### Debruijn Indices
-All binders, on the term as well as on the type level are translated to debruijn indices to avoid name clashing. Consider the following example:
+All variables, on the term as well as on the type level are translated to debruijn indices to avoid name clashing. Consider the following example:
 ```rust
 struct S{ b: Bool }
 
@@ -353,23 +365,27 @@ fn f(s: S) -> Bool {
 All variables will be translated to an integers that denote the number of binders between the variable and it's corresponding binder, separately on the type and term level. In this case this translates to:
 
 ```rust
-// names do not matter anymore!
 struct S { b: Bool }
 
-// there are 0 other definitions between S and the occurrence as argument
-fn f(s: Env<0>) -> Bool {
+struct Unused
+
+// there is 1 other definition between the definition of S 
+// and the occurrence as argument
+fn f(s: Env[1]) -> Bool {
     let f = false
 
     let x = s.b
-    // x is shadowed, but the most inner x is linked
+
     let or_false = |x: Bool| {
         // f will be translated to the index 2
         // because two variables (both names x) are bound in between
         // and x will be translated to the closest x in scope
-        Ctx<0> | Ctx<2>
+        Ctx[0] | Ctx[2]
     }
     
-    Ctx<0>(Ctx<1>)
+    // or_else is the definition above 
+    // and the closest x is directly above or_else
+    Ctx[0](Ctx[1])
 }
 ```
 where `Env` is a vector that holds the corresponding types at the position of the debruijn indices and `Ctx` the values respectively.
@@ -386,7 +402,7 @@ fn main() {
 }
 ```
 
-This will be translated to the following rust code:
+This will be generate the following rust code:
 
 ```rust
 type DynResult<T> = std::result::Result<T, Box<dyn std::error::Error>>
@@ -415,12 +431,12 @@ let i: i64 = unsafe {
 
 ast::Value::Int(i)
 ```
-Although this is using `unsafe`, since we translated the mini rust function definition correctly to the rust definition, this won't fail. 
+Although the call is `unsafe`, since we translated the mini rust function definition correctly to the rust definition, this won't fail. 
 
 ### Pattern Exhaustiveness & Reachability
 In the following section a complete rust pseudo code algorithm will be given to implement exhaustiveness and reachability.
 
-We will assume that the pattern were already type checked. Because of that we can assume that are on the same position and level have the same type.
+We will assume that the pattern were already type checked. Because of that we can assume that patterns on the same position and nesting level have the same type.
 
 ```rust
 // wouldn't type check 
@@ -431,9 +447,9 @@ match (42, (42, 42)) {
 }
 ```
 
-When implementing pattern matching we want to ensure that a list of patterns is _exhaustive_, that is, all possible values are covered by at least one pattern. Further we want that all patterns of a match term are _reachable_, that is, they can be reached by _any_ of all possible input's with respect to the patterns before it.
+When implementing pattern matching we want to ensure that a list of patterns is _exhaustive_, that is, all possible values are covered by at least one pattern. Furthermore we want that all patterns of a match term are _reachable_, i.e they can be reached by _any_ of all possible input's with respect to the patterns before it.
 
-The [`usefulness`-algorithm](https://doc.rust-lang.org/nightly/nightly-rustc/rustc_mir_build/thir/pattern/usefulness/index.html) is used to test a list of patterns on exhaustiveness and reachability. A list of an single element can be used, e.g. when checking `let` or function argument patterns. The Algorithm takes a (possibly empty) list of patterns `ps` and one pattern `q` to test if `q` is useful with respect to the patterns `ps` before it. 
+The [`usefulness`-algorithm](https://doc.rust-lang.org/nightly/nightly-rustc/rustc_mir_build/thir/pattern/usefulness/index.html) is used to test a list of patterns on exhaustiveness and reachability. A list of an single pattern can be tested as well, e.g. when checking `let` or function argument patterns. The Algorithm takes a, possibly empty, list of patterns `ps` and one pattern `q` to test if `q` is useful with respect to the patterns `ps` before it. 
 
 When all patterns are useful with respect to the patterns before them, there is no _unreachable_ pattern.
 The list of patterns is _exhaustive_ iff the wildcard pattern is **not** useful.   
@@ -463,6 +479,7 @@ enum Pattern {
 
     Unit,
     Tuple([Pattern]),
+    // {Ident : Pattern} denotes a dictionary
     Record({Ident: Pattern})
 }
 
@@ -488,7 +505,9 @@ enum PatternConstructor {
 }
 
 struct DeconstructedPattern {
+    // the constructor of the pattern
     constructor: PatternConstructor,
+    // the constructors of its sub patterns
     sub_patterns: [DeconstructedPattern]
 }
 ```
@@ -501,12 +520,12 @@ fn deconstruct(pattern: Pattern) -> DeconstructedPattern {
         // variables and wildcards cover everything and have no sub patterns
         Variable | Wildcard => DeconstructedPattern(Wildcard, []),
         
-        Constant(constant) => match constant type {
+        Constant(constant) => match constant {
             Unit => DeconstructedPattern(Single, []),
 
             // booleans are translated to int ranges for simplicity
-            True => DeconstructedPattern(Range(0, 0), []),
-            False => DeconstructedPattern(Range(1, 1), []),
+            Bool(True) => DeconstructedPattern(Range(0, 0), []),
+            Bool(False) => DeconstructedPattern(Range(1, 1), []),
 
             Int(i) => DeconstructedPattern(Range(i, i), []),
 
@@ -516,7 +535,7 @@ fn deconstruct(pattern: Pattern) -> DeconstructedPattern {
 
         // only one way to instantiate a struct.
         // by design it only can have a `Unit`, `Tup` or `Rec` sub-pattern, 
-        // so we take their sub-patterns as the structs sub-pattern.
+        // so we take their sub-patterns as the structs sub-patterns.
         Struct(sub_pattern) => {
             DeconstructedPattern(Single, deconstruct(sub_pattern).sub_patterns)
         }
@@ -556,28 +575,40 @@ fn deconstruct(pattern: Pattern) -> DeconstructedPattern {
 Let's see an example:
 
 ```rust
-// consider the 3 patterns of this match term
-match (42, 42) {
-    (42, x) | ((x, 42) | (-42, -42)) => 42
-    _ => 42
+struct S {
+    t: (Int, Int)
+}
+
+fn main() {
+    let s = S { t: (42, 42) }
+    // consider the 3 patterns of this match term
+    match s {
+        S { t: (42, x) | ((x, 42) | (-42, -42)) } => 42
+        _ => -42
+    }
 }
 
 // would be deconstructed like this
 let patterns: [DeconstructedPattern] = [
-    DeconstructedPattern(Or, [
-        DeconstructedPattern(Single, [
-            DeconstructedPattern(Range(42, 42), []), 
-            DeconstructedPattern(Wildcard, [])
+    // sub-pattern of the record pattern got 
+    // "lifted" to be the structs sub-patterns
+    DeconstructedPattern(Single, [
+        DeconstructedPattern(Or, [
+            // nested or got expanded
+            DeconstructedPattern(Single, [
+                DeconstructedPattern(Range(42, 42), []), 
+                DeconstructedPattern(Wildcard, [])
+            ]),
+            DeconstructedPattern(Single, [
+                DeconstructedPattern(Wildcard, []), 
+                DeconstructedPattern(Range(42, 42), [])
+            ]),
+            DeconstructedPattern(Single, [
+                DeconstructedPattern(Range(-42, -42), [])
+                DeconstructedPattern(Range(-42, -42), [])
+            ]),
         ]),
-        DeconstructedPattern(Single, [
-            DeconstructedPattern(Wildcard, []), 
-            DeconstructedPattern(Range(42, 42), [])
-        ]),
-        DeconstructedPattern(Single, [
-            DeconstructedPattern(Range(-42, -42), [])
-            DeconstructedPattern(Range(-42, -42), [])
-        ]),
-    ]),
+    ])
     DeconstructedPattern(Wildcard, [])
 ]
 ```
