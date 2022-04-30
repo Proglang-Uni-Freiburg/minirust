@@ -447,7 +447,7 @@ match (42, (42, 42)) {
 }
 ```
 
-When implementing pattern matching we want to ensure that a list of patterns is _exhaustive_, that is, all possible values are covered by at least one pattern. Furthermore we want that all patterns of a match term are _reachable_, i.e they can be reached by _any_ of all possible input's with respect to the patterns before it.
+When implementing pattern matching we want to ensure that a list of patterns is _exhaustive_, that is, all possible values are covered by at least one pattern. Furthermore we want that all patterns of a match term are _reachable_, i.e. they can be reached by _any_ of all possible input's with respect to the patterns before it.
 
 The [`usefulness`-algorithm](https://doc.rust-lang.org/nightly/nightly-rustc/rustc_mir_build/thir/pattern/usefulness/index.html) is used to test a list of patterns on exhaustiveness and reachability. A list of an single pattern can be tested as well, e.g. when checking `let` or function argument patterns. The Algorithm takes a, possibly empty, list of patterns `ps` and one pattern `q` to test if `q` is useful with respect to the patterns `ps` before it. 
 
@@ -857,8 +857,8 @@ fn is_exhaustive(patterns: [Pattern]) -> .. {
     // check if wildcard is useful, if so 
     // the list of patterns is non-exhaustive.
     // needs to be done after reachability checking
-    // so that all patterns are in the matrix already
-    if is_useful(matrix, [ DeconstructedPattern ( Wildcard, [] )]) {
+    // so that all patterns are already in the matrix
+    if is_useful(matrix, [DeconstructedPattern(Wildcard, [])]) {
         // handle non-exhaustiveness
     }
 
