@@ -581,14 +581,17 @@ struct S {
 
 fn main() {
     let s = S { t: (42, 42) }
-    // consider the 3 patterns of this match term
+    // consider this match term
     match s {
         S { t: (42, x) | ((x, 42) | (-42, -42)) } => 42
         _ => -42
     }
 }
+```
 
-// would be deconstructed like this
+would be deconstructed as follows: 
+
+```rust
 let patterns: [DeconstructedPattern] = [
     // sub-pattern of the record pattern got 
     // "lifted" to be the structs sub-patterns
@@ -615,6 +618,7 @@ let patterns: [DeconstructedPattern] = [
 
 We now have translated our input, a list of patterns, to a list of deconstructed patterns.
 Next we need to implement to helper functions for our final `usefulness`-algorithm.
+From now we will refer to "deconstructed patterns" as "patterns".
 
 First we implement two small helper functions `all_constructors` for listing all constructors for a given pattern by the type it tries to cover and  `covered_by` to check if a pattern _covers_ (e.g. range includes another) the other pattern:
 
@@ -657,7 +661,7 @@ fn covered_by(pattern: DeconstructedPattern, other: DeconstructedPattern) {
 }
 ```
 
-Second we want to _split_ a deconstructed pattern `q` with respect to patterns `ps`. The idea of `constructor splitting` is to group together constructors that behave the same way and list all constructors implied by `q`. For example the wildcard deconstructed pattern implies to cover _all_ the constructors of a given pattern and the ranges `(0, 0)` and `(0, 1)` can be grouped to be one range `(0, 1)`. Consider the following pseudo code:
+Second we want to _split_ a pattern `q` with respect to patterns `ps`. The idea of `constructor splitting` is to group together constructors that behave the same way and list all constructors implied by `q`. For example the wildcard pattern implies to cover _all_ the constructors of a given pattern and the ranges `(0, 0)` and `(0, 1)` can be grouped to be one range `(0, 1)`. Consider the following:
 
 ```rust
 fn split(
@@ -719,7 +723,7 @@ fn split(
 }
 ```
 
-Finally we need to _specialize_ a deconstructed pattern in respect to a list of deconstructed patterns. The `specialize_vector` function takes a list of deconstructed patterns `ps` and a deconstructed pattern `q` and returns a list of constructors that are _only_ covered by `q` and not by any heads, i.e. the first element in the vector, in `ps`. Equivalently `specialize_matrix` performs `specialize_vector` for all `ps` inside an matrix `ms`, iff the head of the `ps` is covered by `q`, because otherwise `p` cannot cover anything `q` covers anyways.
+Finally we need to _specialize_ a pattern in respect to a list of patterns. The `specialize_vector` function takes a list of patterns `ps` and a pattern `q` and returns a list of constructors that are _only_ covered by `q` and not by any heads, i.e. the first element in the vector and therefore the other constructors on the same position and depth level, in `ps`. Equivalently `specialize_matrix` performs `specialize_vector` for all `ps` inside an matrix `ms`, if the head of the `ps` is covered by `q`, because otherwise `p` cannot cover anything `q` covers anyways.
 ```rust
 
 // specialize one pattern with respect to another
@@ -777,7 +781,7 @@ fn specialize_matrix(
 }
 ```
 
-In the end we can compute `usefulness` for a given list of patterns `ps` is respect to a list of lists of patterns `ms` by defining the `usefulness`-algorithm:
+In the end we can compute `usefulness` for a given list of patterns `ps` is respect to a matrix of patterns `ms` by defining the `usefulness`-algorithm:
 
 ```rust
 fn is_useful(
@@ -795,7 +799,8 @@ fn is_useful(
     // at the heads of all rows in the matrix. 
     let matrix = matrix.flat_map(|vector| match vector {
         // code for expand omitted, we just lift 
-        // all `sub_patterns` to being rows
+        // all `sub_patterns` in the branches
+        // to being rows in the matrix
         [Or, ..] => expand(vector)
         _ => [vector]
     })
@@ -865,9 +870,8 @@ fn is_exhaustive(patterns: [Pattern]) -> .. {
     }
 }
 ```
-Currently Witnesses for non-exhaustiveness are not supported but should be fairly easy to implement.
 
-
+Currently Witnesses, that is a listing  missing constructors when the exhaustiveness check fails, are not supported but should be fairly easy to implement.
 
 ## Project Structure
 - `ast`
