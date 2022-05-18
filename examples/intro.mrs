@@ -1,0 +1,71 @@
+fn main() {
+    ()
+}
+
+fn basic_types() {
+    let _: () = ()
+    let _: Bool = true
+    let _: Int = 42
+    let _: Str = "Hello World"
+
+    let _: (Int, Int) = (42, 42)
+    let _: {x: Int, y: Int} = {x: 42, y: 42}
+
+    let _: (Int, Int) -> Int = |x: Int, y: Int| x + y
+    let _: Int -> Int -> Int = |x: Int| |y: Int| x + y
+}
+
+fn higher_order_functions(f: Int -> Int) -> Int {
+    f(42)
+}
+
+
+
+struct UnitStruct
+struct TupleStruct (UnitStruct)
+struct RecordStruct { tuple_struct: TupleStruct }
+
+enum Adt {
+    UnitVariant,
+    TupleVariant (Adt),
+    RecordVariant { adt: Adt }
+}
+
+fn instantiate() {
+    let _: UnitStruct = UnitStruct
+    let _: TupleStruct = TupleStruct (UnitStruct)
+    let _: RecordStruct = RecordStruct { tuple_struct: TupleStruct (UnitStruct) }
+
+    let _: Adt = Adt::UnitVariant
+    let _: Adt = Adt::TupleVariant (Adt::UnitVariant)
+    let _: Adt = Adt::RecordVariant { adt: Adt::TupleVariant (Adt::UnitVariant) }
+}
+
+fn patterns() {
+    let x = 42
+    let _ = 42
+
+    let (x, y) = (42, 42)
+
+    let UnitStruct = UnitStruct
+    let TupleStruct (unit_struct) = TupleStruct (UnitStruct)
+    let RecordStruct { tuple_struct: TupleStruct (unit_struct) } = RecordStruct { tuple_struct: TupleStruct (UnitStruct) }
+    
+    let adt: Adt = Adt::RecordVariant { adt: Adt::TupleVariant (Adt::UnitVariant) }
+
+    match adt {
+        Adt::UnitVariant => (),
+        Adt::TupleVariant (_) => (),
+        Adt::RecordVariant { adt: _ } => ()
+    };
+
+    match x {
+        1  => (),
+        2 | 3 => (),
+        _ => ()
+    }
+}
+
+fn pattern_in_fun_arg((x, y): (Int, Int)) -> Int {
+    x + y
+}

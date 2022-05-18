@@ -319,6 +319,7 @@ pub fn specialize(
                     .map(|(_, x)| x.to(_DeconstructedPattern::wildcard(x)))
                     .collect(),
                 ast::Type::Struct(_, var) => specialize_variant_wildcard(var),
+                ast::Type::Unit => vec![],
                 _ => unreachable!(),
             },
             PatternConstructor::Variant(var) => match ty.as_ref() {

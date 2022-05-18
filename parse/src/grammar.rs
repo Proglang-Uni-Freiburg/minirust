@@ -82,7 +82,7 @@ peg::parser! {
         rule typ() -> Type = precedence!{
             s:position!() t:@ e:position!() { Tag::new((path.clone(), (s, e)), t) }
             --
-            d:(@) _ "->" _ c:@ { ast::Type::Fun(Tag::new((path.clone(), (d.start(), d.end())), vec!(d)), c) }
+            d:@ _ "->" _ c:(@) { ast::Type::Fun(Tag::new((path.clone(), (d.start(), d.end())), vec!(d)), c) }
             s:position!() "()" e:position!() _ "->" _ c:@ { ast::Type::Fun(Tag::new((path.clone(), (s, e)), vec!()), c) }
             --
             t:_typ() { t }
@@ -188,7 +188,7 @@ peg::parser! {
             s:position!() "!" e:position!() _ x:term() { ast::Term::UnOp(Tag::new((path.clone(), (s, e)), ast::UnOp::Not), x) }
             s:position!() "-" e:position!() _ x:term() { ast::Term::UnOp(Tag::new((path.clone(), (s, e)), ast::UnOp::Neg), x) }
             --
-            l:(@) "(" __ ts:lit_sep(",", <term()>) __ ")" { ast::Term::App(l, ts) }
+            l:(@) _ "(" __ ts:lit_sep(",", <term()>) __ ")" { ast::Term::App(l, ts) }
             --
             t:(@) "." i:int() { ast::Term::TupProj(t, i) }
             t:(@) "." i:ident() { ast::Term::RecProj(t, i) }

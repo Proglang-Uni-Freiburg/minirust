@@ -351,6 +351,8 @@ All variables, on the term as well as on the type level are translated to debrui
 ```rust
 struct S{ b: Bool }
 
+struct Unused
+
 fn f(s: S) -> Bool {
     let f = false
 
@@ -438,15 +440,6 @@ In the following section a complete rust pseudo code algorithm will be given to 
 
 We will assume that the pattern were already type checked. Because of that we can assume that patterns on the same position and nesting level have the same type.
 
-```rust
-// wouldn't type check 
-match (42, (42, 42)) {
-    (42, (42, "42")) => 42,
-    (42, (42, 42)) => 42,
-    _ => -42
-}
-```
-
 When implementing pattern matching we want to ensure that a list of patterns is _exhaustive_, that is, all possible values are covered by at least one pattern. Furthermore we want that all patterns of a match term are _reachable_, i.e. they can be reached by _any_ of all possible input's with respect to the patterns before it.
 
 The [`usefulness`-algorithm](https://doc.rust-lang.org/nightly/nightly-rustc/rustc_mir_build/thir/pattern/usefulness/index.html) is used to test a list of patterns on exhaustiveness and reachability. A list of an single pattern can be tested as well, e.g. when checking `let` or function argument patterns. The Algorithm takes a, possibly empty, list of patterns `ps` and one pattern `q` to test if `q` is useful with respect to the patterns `ps` before it. 
@@ -459,7 +452,7 @@ First patterns are _deconstructed_ to a `DeconstructedPattern` which consists of
 ```rust
 // used in the actual language
 enum Pattern {
-    Variable(String),
+    Variable(Ident),
     Wildcard,
 
     Constant(Constant),
@@ -467,12 +460,12 @@ enum Pattern {
     // Point { x: Int, y: Int }
     // ^^^^^ ^^^^^^^^^^^^^^^^^^
     // name      sub-pattern
-    Struct(String, Pattern),
+    Struct(Ident, Pattern),
 
     // Enum::Variant (x, y)
     // ^^^^  ^^^^^^^ ^^^^^^
-    // name  variant sub-p
-    Variant(String, String, Pattern),
+    // name  variant sub-pt
+    Variant(Ident, Ident, Pattern),
 
     // contains list of branches
     Or([Pattern]),
@@ -492,7 +485,7 @@ enum PatternConstructor {
     Single,
 
     // covers one variant of a enum
-    Variant(String),
+    Variant(Ident),
 
     // covers a integer range
     Range(Int, Int),
@@ -583,7 +576,7 @@ fn main() {
     let s = S { t: (42, 42) }
     // consider this match term
     match s {
-        S { t: (42, x) | ((x, 42) | (-42, -42)) } => 42
+        S { t: (42, x) | ((x, 42) | (x, -42)) } => 42
         _ => -42
     }
 }
@@ -607,7 +600,7 @@ let patterns: [DeconstructedPattern] = [
                 DeconstructedPattern(Range(42, 42), [])
             ]),
             DeconstructedPattern(Single, [
-                DeconstructedPattern(Range(-42, -42), [])
+                DeconstructedPattern(Wildcard, [])
                 DeconstructedPattern(Range(-42, -42), [])
             ]),
         ]),
@@ -629,7 +622,7 @@ fn all_constructors(pattern: DeconstructedPattern) -> [PatternConstructor] {
         Unit | Tup | Rec | Struct => [Single],
         // can only be 0 or 1
         Bool => [Range(0, 1)],
-        Int => [Range(i64::MAX, i64::MIN)],
+        Int => [Range(i64::MIN, i64::MAX)],
         Str => [NonExhaustive],
         // enum has all variants as possible constructor
         Enum(variants) => [Variant(variant) for variant in variants]
@@ -638,7 +631,7 @@ fn all_constructors(pattern: DeconstructedPattern) -> [PatternConstructor] {
 
 // returns `true` if `pattern` is covered by `other`, `false` otherwise
 // the algorithm e
-fn covered_by(pattern: DeconstructedPattern, other: DeconstructedPattern) {
+fn covered_by(pattern: DeconstructedPattern, other: DeconstructedPattern) -> bool {
     match (pattern, other) {
         // pattern is always covered by wildcard
         (_, Wildcard) => true,
@@ -661,7 +654,7 @@ fn covered_by(pattern: DeconstructedPattern, other: DeconstructedPattern) {
 }
 ```
 
-Second we want to _split_ a pattern `q` with respect to patterns `ps`. The idea of `constructor splitting` is to group together constructors that behave the same way and list all constructors implied by `q`. For example the wildcard pattern implies to cover _all_ the constructors of a given pattern and the ranges `(0, 0)` and `(0, 1)` can be grouped to be one range `(0, 1)`. Consider the following:
+Second we want to _split_ a pattern `q` with respect to patterns `ps`. The idea of `constructor splitting` is to group together constructors that behave the same way and list all constructors implied by `q`. For example the wildcard pattern implies to cover _all_ the constructors of a given pattern and the ranges `(0, 0)` and `(0, 1)` can be grouped to be one range `(0, 1)`. See:
 
 ```rust
 fn split(
@@ -745,7 +738,7 @@ fn specialize_constructor(
                 Enum(variants) => [Wildcard for variants.find(variant).els]
                 // other cases cannot be reached, only enums have variants
             }
-            // others do no need to be recursed
+            // other do not have sub patterns
             _ => []
         }
         // otherwise we need to cover all the sub patterns
@@ -798,7 +791,7 @@ fn is_useful(
     // we recursively expand all `Or` patterns
     // at the heads of all rows in the matrix. 
     let matrix = matrix.flat_map(|vector| match vector {
-        // code for expand omitted, we just lift 
+        // code for expand omitted, we recursively lift 
         // all `sub_patterns` in the branches
         // to being rows in the matrix
         [Or, ..] => expand(vector)
@@ -807,7 +800,7 @@ fn is_useful(
 
     let reachable = false
 
-    if patterns.head is Or {
+    if patterns.head type == Or {
         let all_branches_reachable = false
 
         for branch in expand(patterns) {
