@@ -1,9 +1,9 @@
 fn main() {
-    
+    ()
 }
 
 fn type_mismatch() -> Int {
-    true
+    42
 }
 
 fn non_exhaustive_match(x: Int) -> Int {
@@ -11,11 +11,11 @@ fn non_exhaustive_match(x: Int) -> Int {
         0 => 0,
         1 => 1,
         2 => 2,
-        2 => 2
+        _ => 42
     }
 }
 
-fn ffi_error() -> Str {~
+fn ffi_error() -> Int {~
     use std::time::{SystemTime, UNIX_EPOCH};
     use std::convert::TryInto;
     SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis().try_into()?

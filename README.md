@@ -517,8 +517,8 @@ fn deconstruct(pattern: Pattern) -> DeconstructedPattern {
             Unit => DeconstructedPattern(Single, []),
 
             // booleans are translated to int ranges for simplicity
-            Bool(True) => DeconstructedPattern(Range(0, 0), []),
-            Bool(False) => DeconstructedPattern(Range(1, 1), []),
+            Bool(False) => DeconstructedPattern(Range(0, 0), []),
+            Bool(True) => DeconstructedPattern(Range(1, 1), []),
 
             Int(i) => DeconstructedPattern(Range(i, i), []),
 
@@ -702,7 +702,7 @@ fn split(
             if missing.is_not_empty() {
                 // since there are missing constructors 
                 // we can ignore those present.
-                // `Missing` can only be covered by wildcard
+                // `Missing` can only be covered by `Wildcard`
                 [Missing(missing)]
             } 
             // if all constructors are covered we return them all
@@ -782,7 +782,7 @@ fn is_useful(
     patterns: [DeconstructedPattern]
 ) -> bool {
     // base case
-    // if there is no pattern left in pattern
+    // if there is no pattern left in patterns
     if patterns.is_empty() {
         // if matrix is empty the list of patterns was useful
         return matrix.is_empty()
@@ -800,7 +800,19 @@ fn is_useful(
 
     let reachable = false
 
-    if patterns.head type == Or {
+    if patterns.head type != Or {
+        // go through all the split constructors of head in respect to
+        // all heads in patterns before
+        for constructor in split(patterns.head, matrix.heads) {
+            // its reachable iff sub-patterns are reachable in respect to 
+            // all sub-patterns at that depth before
+            reachable |= is_useful(
+                specialize_matrix(matrix, constructor),
+                specialize_vector(patterns, constructor)
+            )
+
+        }
+    } else {
         let all_branches_reachable = false
 
         for branch in expand(patterns) {
@@ -813,18 +825,6 @@ fn is_useful(
         }
 
         reachable |= all_branches_reachable
-    } else {
-        // go through all the split constructors of head in respect to
-        // all heads in patterns before
-        for constructor in split(patterns.head, matrix.heads) {
-            // its reachable iff sub-patterns are reachable in respect to 
-            // all sub-patterns at that depth before
-            reachable |= is_useful(
-                specialize_matrix(matrix, constructor),
-                specialize_vector(patterns, constructor)
-            )
-
-        }
     }
 
     return reachable

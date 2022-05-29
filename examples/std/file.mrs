@@ -3,7 +3,7 @@ struct File {
     write: Str -> ()
 }
 
-fn new(path: Str) -> File {
+fn handle(path: Str) -> File {
     File { 
         read: || __read(path),
         write: |content: Str| __write(path, content)

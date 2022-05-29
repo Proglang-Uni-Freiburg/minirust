@@ -18,6 +18,9 @@ pub trait Repr {
     type Bind: Clone + Debug;
     type Ann: Clone + Debug;
 }
+
+pub trait ReprItem = Repr + Item;
+
 #[derive(Clone, Debug)]
 pub struct Named;
 impl Repr for Named {
@@ -33,7 +36,47 @@ impl Repr for Debruijn {
     type Ann = CodeRef;
 }
 
-pub trait ReprItem = Repr + Item;
+pub type _Term<R> = Tag<<R as Repr>::Ann, Term<R>>;
+
+#[derive(Clone, Debug)]
+pub enum Term<R: ReprItem> {
+    Var(_Var<R>),
+
+    Unit,
+    True,
+    False,
+    Int(i64),
+    Str(String),
+
+    Seq(_Term<R>, _Term<R>),
+
+    Tup(_Vec<R, _Term<R>>),
+    Rec(_Vec<R, (_Ident<R>, _Term<R>)>),
+
+    UnOp(_UnOp<R>, _Term<R>),
+    BinOp(_Term<R>, _BinOp<R>, _Term<R>),
+
+    Struct(_Var<R>, Path, _Constructor<R>),
+    Enum(_Var<R>, Path, _Ident<R>, _Constructor<R>),
+
+    App(_Term<R>, _Vec<R, _Term<R>>),
+
+    TupProj(_Term<R>, _Int<R>),
+    RecProj(_Term<R>, _Ident<R>),
+
+    Let(_Pattern<R>, Option<_Type<R>>, _Term<R>, _Term<R>),
+
+    Lam(_Vec<R, (_Pattern<R>, _Type<R>)>, _Term<R>),
+    Match(_Term<R>, _Vec<R, (_Pattern<R>, _Term<R>)>),
+
+    Fun(
+        _Bind<R>,
+        _Vec<R, (_Pattern<R>, _Type<R>)>,
+        _Type<R>,
+        _Term<R>,
+        _Term<R>,
+    ),
+}
 
 pub type _Bind<R> = Tag<<R as Repr>::Ann, <R as Repr>::Bind>;
 pub type _Var<R> = Tag<<R as Repr>::Ann, <R as Repr>::Var>;
@@ -115,48 +158,6 @@ pub enum Pattern<R: ReprItem> {
     Unit,
     Tup(_Vec<R, _Pattern<R>>),
     Rec(_Vec<R, (_Bind<R>, Option<_Pattern<R>>)>),
-}
-
-pub type _Term<R> = Tag<<R as Repr>::Ann, Term<R>>;
-
-#[derive(Clone, Debug)]
-pub enum Term<R: ReprItem> {
-    Var(_Var<R>),
-
-    Unit,
-    True,
-    False,
-    Int(i64),
-    Str(String),
-
-    Seq(_Term<R>, _Term<R>),
-
-    Tup(_Vec<R, _Term<R>>),
-    Rec(_Vec<R, (_Ident<R>, _Term<R>)>),
-
-    UnOp(_UnOp<R>, _Term<R>),
-    BinOp(_Term<R>, _BinOp<R>, _Term<R>),
-
-    Struct(_Var<R>, Path, _Constructor<R>),
-    Enum(_Var<R>, Path, _Ident<R>, _Constructor<R>),
-
-    App(_Term<R>, _Vec<R, _Term<R>>),
-
-    TupProj(_Term<R>, _Int<R>),
-    RecProj(_Term<R>, _Ident<R>),
-
-    Let(_Pattern<R>, Option<_Type<R>>, _Term<R>, _Term<R>),
-
-    Lam(_Vec<R, (_Pattern<R>, _Type<R>)>, _Term<R>),
-    Match(_Term<R>, _Vec<R, (_Pattern<R>, _Term<R>)>),
-
-    Fun(
-        _Bind<R>,
-        _Vec<R, (_Pattern<R>, _Type<R>)>,
-        _Type<R>,
-        _Term<R>,
-        _Term<R>,
-    ),
 }
 
 pub type _Body<R> = Tag<<R as Repr>::Ann, Body<R>>;

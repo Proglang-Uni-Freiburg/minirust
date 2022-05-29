@@ -19,8 +19,6 @@ fn higher_order_functions(f: Int -> Int) -> Int {
     f(42)
 }
 
-
-
 struct UnitStruct
 struct TupleStruct (UnitStruct)
 struct RecordStruct { tuple_struct: TupleStruct }
@@ -45,7 +43,7 @@ fn patterns() {
     let x = 42
     let _ = 42
 
-    let (x, y) = (42, 42)
+    let (x, y) = (x, 42)
 
     let UnitStruct = UnitStruct
     let TupleStruct (unit_struct) = TupleStruct (UnitStruct)
@@ -64,8 +62,8 @@ fn patterns() {
         2 | 3 => (),
         _ => ()
     }
-}
 
-fn pattern_in_fun_arg((x, y): (Int, Int)) -> Int {
-    x + y
+    fn f((x, y): (Int, Int)) -> Int {
+        x + y
+    }
 }

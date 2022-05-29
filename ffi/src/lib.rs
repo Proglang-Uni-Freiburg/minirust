@@ -66,33 +66,6 @@ impl FFI {
         Ok(module_path)
     }
 
-    fn _call(&self, function: &Ident, args: &Vec<(Value, Type)>, ty: &Type) -> DynResult<Value> {
-        Ok(function.to(match (args.as_ref().len(), ty.as_ref()) {
-            (0, ast::Type::Unit) => {
-                self.call0::<()>(function.as_ref())?;
-                ast::Value::Unit
-            }
-            (0, ast::Type::Bool) => ast::Value::Bool(self.call0(function.as_ref())?),
-            (0, ast::Type::Int) => ast::Value::Int(self.call0(function.as_ref())?),
-            (0, ast::Type::Str) => ast::Value::Str(self.call0(function.as_ref())?),
-            (1, ast::Type::Unit) => {
-                call1!(self, args, function);
-                ast::Value::Unit
-            }
-            (1, ast::Type::Bool) => ast::Value::Bool(call1!(self, args, function)),
-            (1, ast::Type::Int) => ast::Value::Int(call1!(self, args, function)),
-            (1, ast::Type::Str) => ast::Value::Str(call1!(self, args, function)),
-            (2, ast::Type::Unit) => {
-                call2!(self, args, function);
-                ast::Value::Unit
-            }
-            (2, ast::Type::Bool) => ast::Value::Bool(call2!(self, args, function)),
-            (2, ast::Type::Int) => ast::Value::Int(call2!(self, args, function)),
-            (2, ast::Type::Str) => ast::Value::Str(call2!(self, args, function)),
-            _ => unimplemented!(),
-        }))
-    }
-
     pub fn call(&self, function: &Ident, args: &Vec<(Value, Type)>, ret: &Type) -> Result<Value> {
         self._call(function, args, ret)
             .map_err(|e| Error::new("ffi error").label(function, format!("{}", e)))
@@ -118,6 +91,33 @@ impl FFI {
                 .lib
                 .get::<unsafe fn(T1, T2) -> DynResult<R>>(function.as_bytes())?)(t1, t2)
         }
+    }
+
+    fn _call(&self, function: &Ident, args: &Vec<(Value, Type)>, ty: &Type) -> DynResult<Value> {
+        Ok(function.to(match (args.as_ref().len(), ty.as_ref()) {
+            (0, ast::Type::Unit) => {
+                self.call0::<()>(function.as_ref())?;
+                ast::Value::Unit
+            }
+            (0, ast::Type::Bool) => ast::Value::Bool(self.call0(function.as_ref())?),
+            (0, ast::Type::Int) => ast::Value::Int(self.call0(function.as_ref())?),
+            (0, ast::Type::Str) => ast::Value::Str(self.call0(function.as_ref())?),
+            (1, ast::Type::Unit) => {
+                call1!(self, args, function);
+                ast::Value::Unit
+            }
+            (1, ast::Type::Bool) => ast::Value::Bool(call1!(self, args, function)),
+            (1, ast::Type::Int) => ast::Value::Int(call1!(self, args, function)),
+            (1, ast::Type::Str) => ast::Value::Str(call1!(self, args, function)),
+            (2, ast::Type::Unit) => {
+                call2!(self, args, function);
+                ast::Value::Unit
+            }
+            (2, ast::Type::Bool) => ast::Value::Bool(call2!(self, args, function)),
+            (2, ast::Type::Int) => ast::Value::Int(call2!(self, args, function)),
+            (2, ast::Type::Str) => ast::Value::Str(call2!(self, args, function)),
+            _ => unimplemented!(),
+        }))
     }
 }
 

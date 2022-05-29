@@ -7,5 +7,13 @@ use std::time;
 
 
 fn main() {
-    io::println("Hello World")
+    let path = "/tmp/foo"
+
+    let file = file::handle(path)
+
+    file.write(file.read()+ "foo");
+
+    let contents = file.read()
+
+    io::println("Contents: " + contents)
 }
